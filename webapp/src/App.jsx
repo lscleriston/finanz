@@ -105,6 +105,8 @@ function App() {
           <thead>
             <tr>
               <th>ID</th>
+              <th>Conta</th>
+              <th>Banco</th>
               <th>Data</th>
               <th>Descrição</th>
               <th>Valor</th>
@@ -115,6 +117,8 @@ function App() {
             {transactions.map((t) => (
               <tr key={t.id}>
                 <td>{t.id}</td>
+                <td>{t.account_type || '-'}</td>
+                <td>{t.account_name || '-'}</td>
                 <td>{t.date}</td>
                 <td>{t.description}</td>
                 <td>{t.amount}</td>
