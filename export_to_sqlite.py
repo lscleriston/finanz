@@ -91,6 +91,11 @@ def create_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_type TEXT")
     if "account_name" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_name TEXT")
+
+    # Índice único para evitar duplicatas de linhas repetidas
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_type, account_name, date, description, amount)"
+    )
     conn.commit()
 
 
@@ -103,7 +108,7 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
 
     conn.execute(
         """
-        INSERT INTO transactions (source_file, account_type, account_name, date, description, amount, category, details)
+        INSERT OR IGNORE INTO transactions (source_file, account_type, account_name, date, description, amount, category, details)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
@@ -320,6 +325,13 @@ def process_file(path: Path, conn: sqlite3.Connection) -> int:
 def main() -> None:
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    # limpeza automática antes de recarregar (evita duplicação por repeats) 
+    # e garante novo contexto, mas mantém se for necessário.
+    if DB_PATH.exists():
+        DB_PATH.unlink()
+        print(f"Banco removido: {DB_PATH}. Iniciando nova carga limpa.")
+
     conn = sqlite3.connect(str(DB_PATH))
     create_db(conn)
 
