@@ -16,7 +16,8 @@ from typing import Optional, Dict, List
 
 BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "export"
-DB_PATH = BASE_DIR / "export" / "transactions.db"
+DATA_DIR = BASE_DIR / "data"
+DB_PATH = DATA_DIR / "transactions.db"
 
 
 def normalize_amount(value: str) -> Optional[float]:
@@ -282,7 +283,7 @@ def main() -> None:
     conn = sqlite3.connect(str(DB_PATH))
     create_db(conn)
 
-    files = list(EXPORT_DIR.rglob("*.*"))
+    files = [f for f in EXPORT_DIR.rglob("*.*") if f != DB_PATH and f.suffix.lower() != ".db"]
     total = 0
     errors = []
 
