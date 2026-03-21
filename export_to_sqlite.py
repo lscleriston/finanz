@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "export"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "transactions.db"
+MAPPING_FILE = DATA_DIR / "account_mappings.json"
 
 
 def normalize_amount(value: str) -> Optional[float]:
@@ -65,13 +66,40 @@ def parse_date(value: str) -> Optional[str]:
     return None
 
 
+def _load_account_mappings() -> List[Dict[str, str]]:
+    if not MAPPING_FILE.exists():
+        return []
+    try:
+        with MAPPING_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return [m for m in data if isinstance(m, dict) and "path" in m and "name" in m]
+    except Exception:
+        return []
+    return []
+
+
+def _find_account_name(resource_path: str, default_name: Optional[str]) -> Optional[str]:
+    mappings = _load_account_mappings()
+    candidate = default_name
+    best_len = -1
+    for m in mappings:
+        mpath = m["path"].rstrip("/")
+        if mpath.startswith("/"):
+            mpath = mpath[1:]
+        if repository_path := resource_path.lstrip("/"):
+            if repository_path.startswith(mpath) and len(mpath) > best_len:
+                candidate = m["name"]
+                best_len = len(mpath)
+    return candidate
+
+
 def create_db(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_file TEXT,
-            account_type TEXT,
             account_name TEXT,
             date TEXT,
             description TEXT,
@@ -83,37 +111,33 @@ def create_db(conn: sqlite3.Connection) -> None:
         """
     )
 
-    # caso tabela exista sem as colunas novas, adiciona
+    # caso tabela exista sem a coluna nova, adiciona
     cur = conn.cursor()
     cur.execute("PRAGMA table_info(transactions)")
     existing_cols = {row[1] for row in cur.fetchall()}
-    if "account_type" not in existing_cols:
-        conn.execute("ALTER TABLE transactions ADD COLUMN account_type TEXT")
     if "account_name" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_name TEXT")
 
     # Índice único para evitar duplicatas de linhas repetidas
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_type, account_name, date, description, amount)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_name, date, description, amount)"
     )
     conn.commit()
 
 
-_CURRENT_ACCOUNT_INFO: Dict[str, Optional[str]] = {"account_type": None, "account_name": None}
+_CURRENT_ACCOUNT_NAME: Optional[str] = None
 
 
 def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> None:
-    account_type = row.get("account_type") or _CURRENT_ACCOUNT_INFO.get("account_type")
-    account_name = row.get("account_name") or _CURRENT_ACCOUNT_INFO.get("account_name")
+    account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
 
     conn.execute(
         """
-        INSERT OR IGNORE INTO transactions (source_file, account_type, account_name, date, description, amount, category, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO transactions (source_file, account_name, date, description, amount, category, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_file,
-            account_type,
             account_name,
             row.get("date"),
             row.get("description"),
@@ -292,21 +316,21 @@ def _extract_account_info(path: Path) -> Dict[str, Optional[str]]:
     try:
         rel = path.relative_to(EXPORT_DIR)
     except ValueError:
-        return {"account_type": None, "account_name": None}
+        return {"account_name": None}
 
     parts = rel.parts
-    account_type = parts[0] if len(parts) > 0 else None
-    account_name = parts[1] if len(parts) > 1 else None
-    return {"account_type": account_type, "account_name": account_name}
+    account_name = parts[1] if len(parts) > 1 else (parts[0] if len(parts) > 0 else None)
+    account_name = _find_account_name(rel.as_posix(), account_name)
+    return {"account_name": account_name}
 
 
 def process_file(path: Path, conn: sqlite3.Connection) -> int:
     account_info = _extract_account_info(path)
     ext = path.suffix.lower()
 
-    global _CURRENT_ACCOUNT_INFO
-    old_account_info = _CURRENT_ACCOUNT_INFO
-    _CURRENT_ACCOUNT_INFO = account_info
+    global _CURRENT_ACCOUNT_NAME
+    old_account_name = _CURRENT_ACCOUNT_NAME
+    _CURRENT_ACCOUNT_NAME = account_info.get("account_name")
 
     try:
         if ext in {".csv", ".tsv"}:
@@ -319,7 +343,7 @@ def process_file(path: Path, conn: sqlite3.Connection) -> int:
             return consume_pdf(path, conn)
         return 0
     finally:
-        _CURRENT_ACCOUNT_INFO = old_account_info
+        _CURRENT_ACCOUNT_NAME = old_account_name
 
 
 def main() -> None:

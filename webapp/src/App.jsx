@@ -19,12 +19,18 @@ function App() {
     if (Number.isNaN(number)) return value
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(number)
   }
+
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(0)
   const limit = 50
+
+  const [mappings, setMappings] = useState([])
+  const [mappingPath, setMappingPath] = useState('')
+  const [mappingName, setMappingName] = useState('')
+  const [reloadStatus, setReloadStatus] = useState('')
 
   const queryParams = new URLSearchParams()
   if (q) queryParams.set('q', q)
@@ -57,8 +63,63 @@ function App() {
     }
   }
 
+  const fetchMappings = async () => {
+    try {
+      const base = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+      const res = await fetch(`${base}/api/account-mappings`)
+      if (!res.ok) throw new Error('Erro ao carregar mapeamentos')
+      const data = await res.json()
+      setMappings(data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const saveMapping = async () => {
+    try {
+      const base = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+      const res = await fetch(`${base}/api/account-mappings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: mappingPath, name: mappingName }),
+      })
+      if (!res.ok) throw new Error('Falha ao salvar mapeamento')
+      await fetchMappings()
+      setMappingPath('')
+      setMappingName('')
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const removeMapping = async (path) => {
+    try {
+      const base = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+      const res = await fetch(`${base}/api/account-mappings?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Falha ao apagar mapeamento')
+      await fetchMappings()
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const reloadData = async () => {
+    try {
+      const base = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+      setReloadStatus('Recarregando...')
+      const res = await fetch(`${base}/api/reload`, { method: 'POST' })
+      if (!res.ok) throw new Error('Falha ao recarregar dados')
+      setReloadStatus('Dados recarregados com sucesso')
+      fetchData()
+    } catch (err) {
+      setReloadStatus('Erro no reload')
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     fetchData()
+    fetchMappings()
   }, [q, dateFrom, dateTo, page])
 
   if (loading) return <div className="App">Carregando...</div>
@@ -67,6 +128,51 @@ function App() {
   return (
     <div className="App">
       <h1>Finanz Dashboard</h1>
+
+      <div className="mapping-card">
+        <h2>Configurar conta</h2>
+        <div className="mapping-form">
+          <label>
+            Caminho da conta:
+            <input
+              type="text"
+              value={mappingPath}
+              onChange={(e) => setMappingPath(e.target.value)}
+              placeholder="CartaoCredito/Bradesco"
+            />
+          </label>
+          <label>
+            Nome da conta:
+            <input
+              type="text"
+              value={mappingName}
+              onChange={(e) => setMappingName(e.target.value)}
+              placeholder="Bradesco"
+            />
+          </label>
+          <button onClick={saveMapping} className="btn-primary">Salvar</button>
+        </div>
+
+        <div className="mapping-list">
+          <h3>Mapeamentos existentes</h3>
+          {mappings.length === 0 ? (
+            <p>Nenhum mapeamento configurado.</p>
+          ) : (
+            <ul>
+              {mappings.map((m) => (
+                <li key={m.path}>
+                  <span>{m.path} → {m.name}</span>
+                  <button onClick={() => removeMapping(m.path)}>Excluir</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <button onClick={reloadData} className="btn-primary">Recarregar dados</button>
+        <div>{reloadStatus}</div>
+      </div>
+
       <div className="summary">
         <strong>Total de lançamentos:</strong> {summary.total_records}
         <br />
@@ -120,7 +226,6 @@ function App() {
             <tr>
               <th>ID</th>
               <th>Conta</th>
-              <th>Banco</th>
               <th>Data</th>
               <th>Descrição</th>
               <th>Valor</th>
@@ -131,7 +236,6 @@ function App() {
             {transactions.map((t) => (
               <tr key={t.id}>
                 <td>{t.id}</td>
-                <td>{t.account_type || '-'}</td>
                 <td>{t.account_name || '-'}</td>
                 <td>{formatDate(t.date)}</td>
                 <td>{t.description}</td>

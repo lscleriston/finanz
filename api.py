@@ -2,6 +2,7 @@
 """Backend FastAPI para consultar transações do SQLite."""
 from pathlib import Path
 import sqlite3
+import json
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -26,12 +27,21 @@ app.add_middleware(
 class Transaction(BaseModel):
     id: int
     source_file: Optional[str]
+    account_name: Optional[str]
     date: Optional[str]
     description: Optional[str]
     amount: Optional[float]
     category: Optional[str]
     details: Optional[str]
     inserted_at: Optional[str]
+
+
+class AccountMapping(BaseModel):
+    path: str
+    name: str
+
+
+MAPPING_FILE = DATA_DIR / "account_mappings.json"
 
 
 def _query(sql: str, params: tuple = ()) -> List[dict]:
@@ -45,6 +55,70 @@ def _query(sql: str, params: tuple = ()) -> List[dict]:
     rows = cur.fetchall()
     con.close()
     return [dict(r) for r in rows]
+
+
+def _read_mappings() -> List[dict]:
+    if not MAPPING_FILE.exists():
+        return []
+    try:
+        with MAPPING_FILE.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return [m for m in data if isinstance(m, dict) and "path" in m and "name" in m]
+    except Exception:
+        return []
+    return []
+
+
+def _write_mappings(mappings: List[dict]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with MAPPING_FILE.open("w", encoding="utf-8") as f:
+        json.dump(mappings, f, ensure_ascii=False, indent=2)
+
+
+@app.get("/api/account-mappings", response_model=List[AccountMapping])
+def get_account_mappings():
+    return _read_mappings()
+
+
+@app.post("/api/account-mappings", response_model=List[AccountMapping])
+def set_account_mapping(mapping: AccountMapping):
+    lst = _read_mappings()
+    path = mapping.path.rstrip("/")
+    if path.startswith("/"):
+        path = path[1:]
+    found = False
+    for item in lst:
+        if item["path"] == path:
+            item["name"] = mapping.name
+            found = True
+            break
+    if not found:
+        lst.append({"path": path, "name": mapping.name})
+    _write_mappings(lst)
+    return lst
+
+
+@app.delete("/api/account-mappings", response_model=List[AccountMapping])
+def delete_account_mapping(path: str = Query(...)):
+    lst = _read_mappings()
+    normalized = path.rstrip("/")
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+    lst = [item for item in lst if item["path"] != normalized]
+    _write_mappings(lst)
+    return lst
+
+
+@app.post("/api/reload")
+def reload_data():
+    import subprocess
+
+    try:
+        subprocess.run(["python3", str(BASE_DIR / "export_to_sqlite.py")], check=True)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/transactions", response_model=List[Transaction])

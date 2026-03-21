@@ -171,6 +171,61 @@ td:nth-child(4) {
   }
 }
 
+.mapping-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin-top: 18px;
+}
+
+.mapping-card h2,
+.mapping-card h3 {
+  margin: 0 0 12px;
+}
+
+.mapping-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.mapping-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.mapping-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mapping-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.btn-primary {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--primary-strong);
+}
+
 .hero {
   position: relative;
 
