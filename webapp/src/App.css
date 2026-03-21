@@ -34,6 +34,28 @@ h1 {
   color: var(--primary-strong);
 }
 
+.top-nav {
+  margin-bottom: 18px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.top-nav button {
+  background: #e4f6f3;
+  border: 1px solid var(--primary);
+  color: var(--primary-strong);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.top-nav button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
 .summary,
 .filters,
 .pagination,

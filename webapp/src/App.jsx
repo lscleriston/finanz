@@ -5,6 +5,7 @@ function App() {
   const [transactions, setTransactions] = useState([])
   const [summary, setSummary] = useState({ total_records: 0, total_amount: 0 })
   const [loading, setLoading] = useState(true)
+  const [pageView, setPageView] = useState('dashboard')  // 'dashboard' ou 'accounts'
 
   const formatDate = (dateString) => {
     if (!dateString) return '-'
@@ -127,7 +128,133 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Finanz Dashboard</h1>
+      <nav className="top-nav">
+        <button onClick={() => setPageView('dashboard')} className={pageView === 'dashboard' ? 'active' : ''}>Dashboard</button>
+        <button onClick={() => setPageView('accounts')} className={pageView === 'accounts' ? 'active' : ''}>Cadastro de Conta</button>
+      </nav>
+
+      {pageView === 'accounts' ? (
+        <div className="mapping-card">
+          <h2>Cadastro de Conta</h2>
+          <div className="mapping-form">
+            <label>
+              Caminho da conta:
+              <input
+                type="text"
+                value={mappingPath}
+                onChange={(e) => setMappingPath(e.target.value)}
+                placeholder="CartaoCredito/Bradesco"
+              />
+            </label>
+            <label>
+              Nome da conta:
+              <input
+                type="text"
+                value={mappingName}
+                onChange={(e) => setMappingName(e.target.value)}
+                placeholder="Bradesco"
+              />
+            </label>
+            <button onClick={saveMapping} className="btn-primary">Salvar</button>
+          </div>
+
+          <div className="mapping-list">
+            <h3>Mapeamentos existentes</h3>
+            {mappings.length === 0 ? (
+              <p>Nenhum mapeamento configurado.</p>
+            ) : (
+              <ul>
+                {mappings.map((m) => (
+                  <li key={m.path}>
+                    <span>{m.path} → {m.name}</span>
+                    <button onClick={() => removeMapping(m.path)}>Excluir</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <button onClick={reloadData} className="btn-primary">Recarregar dados</button>
+          <div>{reloadStatus}</div>
+        </div>
+      ) : (
+        <>
+          <h1>Finanz Dashboard</h1>
+          <div className="summary">
+            <strong>Total de lançamentos:</strong> {summary.total_records}
+            <br />
+            <strong>Total pago:</strong> {formatCurrency(summary.total_amount)}
+          </div>
+
+          <div className="filters">
+            <label>
+              Busca:
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="descrição / categoria"
+              />
+            </label>
+            <label>
+              De:
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </label>
+            <label>
+              Até:
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="pagination">
+            <button onClick={() => setPage((prev) => Math.max(0, prev - 1))} disabled={page === 0}>
+              Anterior
+            </button>
+            <span>Página {page + 1}</span>
+            <button
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={(page + 1) * limit >= summary.total_records}
+            >
+              Próxima
+            </button>
+          </div>
+
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Conta</th>
+                  <th>Data</th>
+                  <th>Descrição</th>
+                  <th>Valor</th>
+                  <th>Categoria</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td>{t.id}</td>
+                    <td>{t.account_name || '-'}</td>
+                    <td>{formatDate(t.date)}</td>
+                    <td>{t.description}</td>
+                    <td>{formatCurrency(t.amount)}</td>
+                    <td>{t.category || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <div className="mapping-card">
         <h2>Configurar conta</h2>
