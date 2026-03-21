@@ -54,7 +54,6 @@ function App() {
               <th>Descrição</th>
               <th>Valor</th>
               <th>Categoria</th>
-              <th>Fonte</th>
             </tr>
           </thead>
           <tbody>
@@ -65,7 +64,6 @@ function App() {
                 <td>{t.description}</td>
                 <td>{t.amount}</td>
                 <td>{t.category}</td>
-                <td>{t.source_file}</td>
               </tr>
             ))}
           </tbody>
