@@ -5,6 +5,20 @@ function App() {
   const [transactions, setTransactions] = useState([])
   const [summary, setSummary] = useState({ total_records: 0, total_amount: 0 })
   const [loading, setLoading] = useState(true)
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    const d = new Date(dateString)
+    if (Number.isNaN(d.getTime())) return dateString
+    return d.toLocaleDateString('pt-BR')
+  }
+
+  const formatCurrency = (value) => {
+    if (value === undefined || value === null || value === '') return '-'
+    const number = Number(value)
+    if (Number.isNaN(number)) return value
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(number)
+  }
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -56,7 +70,7 @@ function App() {
       <div className="summary">
         <strong>Total de lançamentos:</strong> {summary.total_records}
         <br />
-        <strong>Total pago:</strong> R$ {Number(summary.total_amount || 0).toFixed(2)}
+        <strong>Total pago:</strong> {formatCurrency(summary.total_amount)}
       </div>
 
       <div className="filters">
@@ -119,10 +133,10 @@ function App() {
                 <td>{t.id}</td>
                 <td>{t.account_type || '-'}</td>
                 <td>{t.account_name || '-'}</td>
-                <td>{t.date}</td>
+                <td>{formatDate(t.date)}</td>
                 <td>{t.description}</td>
-                <td>{t.amount}</td>
-                <td>{t.category}</td>
+                <td>{formatCurrency(t.amount)}</td>
+                <td>{t.category || '-'}</td>
               </tr>
             ))}
           </tbody>
