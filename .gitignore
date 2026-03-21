@@ -10,3 +10,7 @@ venv/
 /.mypy_cache
 /.pytest_cache
 /.cache
+
+# frontend
+webapp/node_modules/
+
