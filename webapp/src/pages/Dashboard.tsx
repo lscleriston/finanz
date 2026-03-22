@@ -205,9 +205,16 @@ export default function Transactions() {
     ? transactions.filter((tx) => tx.account_id && accountFilterIds.includes(tx.account_id))
     : transactions;
 
-  const filteredTotalAmount = filteredTransactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    if (!a.date || !b.date) return 0;
+    if (a.date < b.date) return 1;
+    if (a.date > b.date) return -1;
+    return 0;
+  });
 
-  const groupedTransactions = filteredTransactions.reduce((acc, tx) => {
+  const filteredTotalAmount = sortedTransactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+  const groupedTransactions = sortedTransactions.reduce((acc, tx) => {
     const key = tx.date || "Sem data";
     if (!acc[key]) acc[key] = [];
     acc[key].push(tx);
