@@ -486,7 +486,7 @@ def consume_pdf(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = 
             return 0
 
     lines = text.splitlines()
-    return _consume_lines(lines, path, conn)
+    return _consume_lines(lines, path, conn, due_date)
 
 
 def _extract_account_info(path: Path) -> Dict[str, Optional[str]]:
