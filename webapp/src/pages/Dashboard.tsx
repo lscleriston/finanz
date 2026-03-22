@@ -17,7 +17,7 @@ import { Search } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
-export default function Dashboard() {
+export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);

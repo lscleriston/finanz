@@ -1,12 +1,12 @@
 import { useState } from "react";
-import Dashboard from "@/pages/Dashboard";
+import Transactions from "@/pages/Dashboard";
 import AccountMappings from "@/pages/AccountMappings";
 import ImportTransactions from "@/pages/ImportTransactions";
 
-type PageView = "dashboard" | "accounts" | "import";
+type PageView = "transactions" | "accounts" | "import";
 
 export default function AppShell() {
-  const [page, setPage] = useState<PageView>("dashboard");
+  const [page, setPage] = useState<PageView>("transactions");
 
   return (
     <div className="min-h-screen bg-background">
@@ -17,14 +17,14 @@ export default function AppShell() {
           </h1>
           <nav className="flex gap-1">
             <button
-              onClick={() => setPage("dashboard")}
+              onClick={() => setPage("transactions")}
               className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                page === "dashboard"
+                page === "transactions"
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-secondary"
               }`}
             >
-              Dashboard
+              Transações
             </button>
             <button
               onClick={() => setPage("accounts")}
@@ -51,7 +51,7 @@ export default function AppShell() {
       </header>
 
       <main className="container py-6 animate-fade-in">
-        {page === "dashboard" && <Dashboard />}
+        {page === "transactions" && <Transactions />}
         {page === "accounts" && <AccountMappings />}
         {page === "import" && <ImportTransactions />}
       </main>
