@@ -166,6 +166,10 @@ def _normalize_amount_for_account(
     if amount is None:
         return None
 
+    if invert_values:
+        # caso o usuário marque invert_values, invertemos diretamente o valor bruto (antes de regras de cartão)
+        return -amount if amount != 0 else 0.0
+
     if not account_tipo and not account_name:
         value = amount
     else:
@@ -188,9 +192,6 @@ def _normalize_amount_for_account(
                 value = 0.0
         else:
             value = amount
-
-    if invert_values and value is not None and value != 0:
-        return -value
 
     return value
 
