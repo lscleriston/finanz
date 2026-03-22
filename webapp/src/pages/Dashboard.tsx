@@ -27,6 +27,7 @@ export default function Transactions() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string; invert_values: boolean }[]>([]);
+  const [accountFilterIds, setAccountFilterIds] = useState<number[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountTipo, setNewAccountTipo] = useState("");
@@ -90,6 +91,7 @@ export default function Transactions() {
       try {
         const data = await fetchAccounts();
         setAccounts(data);
+        setAccountFilterIds(data.map((item) => item.id));
         if (data.length > 0 && selectedAccountId === undefined) {
           setSelectedAccountId(data[0].id);
         }
@@ -199,7 +201,11 @@ export default function Transactions() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [hasMore, loading, loadingMore, loadPage]);
 
-  const groupedTransactions = transactions.reduce((acc, tx) => {
+  const filteredTransactions = accountFilterIds.length
+    ? transactions.filter((tx) => tx.account_id && accountFilterIds.includes(tx.account_id))
+    : transactions;
+
+  const groupedTransactions = filteredTransactions.reduce((acc, tx) => {
     const key = tx.date || "Sem data";
     if (!acc[key]) acc[key] = [];
     acc[key].push(tx);
@@ -299,14 +305,48 @@ export default function Transactions() {
         </CardContent>
       </Card>
 
-      {/* Transactions table */}
+      {/* Transactions table with account filter */}
       <Card>
         <CardContent className="p-0 overflow-auto">
-          <Table>
-            <TableCaption>
-              Total acumulado: <strong>{formatCurrency(summary?.total_amount ?? 0)}</strong>
-            </TableCaption>
-            <TableHeader>
+          <div className="flex gap-4">
+            <aside className="w-60 border-r p-4">
+              <h2 className="text-sm font-semibold mb-2">Filtro de contas</h2>
+              <div className="space-y-1">
+                {accounts.map((acc) => (
+                  <label key={acc.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={accountFilterIds.includes(acc.id)}
+                      onChange={() => {
+                        setAccountFilterIds((prev) =>
+                          prev.includes(acc.id) ? prev.filter((id) => id !== acc.id) : [...prev, acc.id]
+                        );
+                      }}
+                      className="h-4 w-4 rounded border"
+                    />
+                    {acc.name}
+                  </label>
+                ))}
+              </div>
+              <button
+                className="mt-3 rounded bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground"
+                onClick={() => setAccountFilterIds(accounts.map((a) => a.id))}
+              >
+                Selecionar todos
+              </button>
+              <button
+                className="mt-2 rounded bg-muted px-2 py-1 text-xs"
+                onClick={() => setAccountFilterIds([])}
+              >
+                Limpar filtro
+              </button>
+            </aside>
+            <div className="flex-1">
+              <Table>
+                <TableCaption>
+                  Total acumulado: <strong>{formatCurrency(summary?.total_amount ?? 0)}</strong>
+                </TableCaption>
+                <TableHeader>
               <TableRow>
                 <TableHead className="w-16">ID</TableHead>
                 <TableHead>Conta</TableHead>
@@ -370,7 +410,9 @@ export default function Transactions() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </div>
+      </div>
+    </CardContent>
 
         <div className="flex items-center justify-between border-t px-4 py-3">
           <p className="text-sm text-muted-foreground">
