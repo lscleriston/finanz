@@ -289,12 +289,7 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
     if account_tipo and account_tipo.lower() == "cartaocredito":
         if due_date:
             target_date = due_date
-        # reescreve descrição para manter referência à data oriiginal
-        if original_date and original_date != target_date:
-            orig_label = original_date
-            if "(" not in str(row.get("description") or ""):
-                row["description"] = f"{row.get('description', '').strip()} (orig: {orig_label})".strip()
-
+    # Não é necessário adicionar "(orig: ...)" na descrição porque original_date já está armazenada.
     if original_date is None:
         original_date = target_date
 
