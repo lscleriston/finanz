@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchTransactions, fetchSummary, type Transaction, type Summary } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, ChevronLeft, ChevronRight, DollarSign, FileText } from "lucide-react";
+import { Search } from "lucide-react";
 
 const PAGE_SIZE = 20;
 
@@ -20,35 +20,84 @@ export default function Dashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [offset, setOffset] = useState(0);
+  const offsetRef = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [txns, sum] = await Promise.all([
-        fetchTransactions({ limit: PAGE_SIZE, offset, q, date_from: dateFrom, date_to: dateTo }),
-        fetchSummary(),
-      ]);
-      setTransactions(txns);
-      setSummary(sum);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, [offset, q, dateFrom, dateTo]);
+  const loadPage = useCallback(
+    async (isReset = false) => {
+      if (!hasMore && !isReset) return;
+
+      if (isReset) {
+        setLoading(true);
+        setHasMore(true);
+        offsetRef.current = 0;
+      } else {
+        setLoadingMore(true);
+      }
+
+      try {
+        const offset = offsetRef.current;
+        const txns = await fetchTransactions({
+          limit: PAGE_SIZE,
+          offset,
+          q,
+          date_from: dateFrom,
+          date_to: dateTo,
+        });
+
+        if (isReset) {
+          setTransactions(txns);
+        } else {
+          setTransactions((prev) => [...prev, ...txns]);
+        }
+
+        offsetRef.current = offset + txns.length;
+
+        if (txns.length < PAGE_SIZE) {
+          setHasMore(false);
+        }
+
+        const sum = await fetchSummary();
+        setSummary(sum);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [dateFrom, dateTo, q]
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadPage(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = () => {
-    setOffset(0);
-    load();
+    setHasMore(true);
+    setTransactions([]);
+    offsetRef.current = 0;
+    loadPage(true);
   };
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (loading || loadingMore || !hasMore) return;
+
+      const reachedBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 200;
+      if (reachedBottom) {
+        loadPage(false);
+      }
+    };
+
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hasMore, loading, loadingMore, loadPage]);
 
   return (
     <div className="space-y-6">
@@ -152,19 +201,14 @@ export default function Dashboard() {
           </Table>
         </div>
 
-        {/* Pagination */}
         <div className="flex items-center justify-between border-t px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            Mostrando {offset + 1}–{offset + transactions.length}
+            Mostrando 1–{transactions.length} {hasMore ? "(rolagem infinita ativada)" : "(fim dos resultados)"}
           </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-              <ChevronLeft className="mr-1 h-4 w-4" /> Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={transactions.length < PAGE_SIZE} onClick={() => setOffset(offset + PAGE_SIZE)}>
-              Próxima <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
+          <p className="text-sm font-medium">
+            {loadingMore && "Carregando mais..."}
+            {!loading && !loadingMore && !hasMore && "Todas as transações carregadas."}
+          </p>
         </div>
       </Card>
     </div>
