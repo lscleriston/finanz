@@ -199,6 +199,13 @@ def delete_account(id: int = Query(..., ge=1)):
     if not DB_PATH.exists():
         raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
 
+    # obter conta antes de deletar para remover pasta correspondente
+    account = _query("SELECT * FROM accounts WHERE id = ?", (id,))
+    if not account:
+        raise HTTPException(status_code=404, detail=f"Conta com id {id} não encontrada")
+
+    account_path = account[0].get("path")
+
     conn = sqlite3.connect(str(DB_PATH))
     try:
         cur = conn.cursor()
@@ -206,6 +213,15 @@ def delete_account(id: int = Query(..., ge=1)):
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail=f"Conta com id {id} não encontrada")
+
+        if account_path:
+            folder = Path(account_path)
+            if not folder.is_absolute():
+                folder = BASE_DIR / "export" / folder
+            if folder.exists() and folder.is_dir():
+                # remova recursivamente a pasta para limpar arquivos de importação
+                shutil.rmtree(folder)
+
         return {"status": "deleted", "id": id}
     finally:
         conn.close()

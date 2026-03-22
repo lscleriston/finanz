@@ -31,13 +31,24 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 TableFooter.displayName = "TableFooter";
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn("border-b transition-colors data-[state=selected]:bg-muted hover:bg-muted/50", className)}
-      {...props}
-    />
-  ),
+  ({ className, children, ...props }, ref) => {
+    const normalizedChildren = React.Children.toArray(children).filter((child) => {
+      if (typeof child === "string") {
+        return child.trim().length > 0;
+      }
+      return true;
+    });
+
+    return (
+      <tr
+        ref={ref}
+        className={cn("border-b transition-colors data-[state=selected]:bg-muted hover:bg-muted/50", className)}
+        {...props}
+      >
+        {normalizedChildren}
+      </tr>
+    );
+  },
 );
 TableRow.displayName = "TableRow";
 
