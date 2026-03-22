@@ -332,7 +332,14 @@ def consume_csv(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = 
         for raw in reader:
             candidate = {
                 "date": parse_date(raw.get("date") or raw.get("data") or raw.get("Data") or raw.get("DATA")),
-                "description": (raw.get("description") or raw.get("descricao") or raw.get("Descricao") or "").strip(),
+                "description": (
+                    raw.get("description")
+                    or raw.get("descricao")
+                    or raw.get("Descricao")
+                    or raw.get("title")
+                    or raw.get("Title")
+                    or ""
+                ).strip(),
                 "amount": normalize_amount(raw.get("amount") or raw.get("valor") or raw.get("Valor") or raw.get("Amount")),
                 "category": (raw.get("category") or raw.get("categoria") or "").strip(),
                 "details": json.dumps(raw, ensure_ascii=False),
