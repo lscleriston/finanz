@@ -8,6 +8,7 @@ import { toast } from "sonner";
 export default function ImportTransactions() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
+  const [billingDate, setBillingDate] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -35,11 +36,18 @@ export default function ImportTransactions() {
       return;
     }
 
+    const account = accounts.find((a) => a.id === selectedAccountId);
+    if (account?.tipo.toLowerCase() === "cartaocredito" && !billingDate) {
+      toast.error("Informe a data de vencimento para conta de cartão");
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await importFiles(selectedAccountId, files);
+      const result = await importFiles(selectedAccountId, files, billingDate || undefined);
       toast.success(`Importados ${result.saved_files.length} arquivos, rodando reload...`);
       setFiles([]);
+      setBillingDate("");
     } catch (error) {
       console.error(error);
       toast.error("Falha na importação");
@@ -70,6 +78,13 @@ export default function ImportTransactions() {
               ))}
             </select>
           </div>
+
+          {accounts.find((a) => a.id === selectedAccountId)?.tipo.toLowerCase() === "cartaocredito" && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Data de vencimento (fatura)</label>
+              <Input type="date" value={billingDate} onChange={(e) => setBillingDate(e.target.value)} />
+            </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Arquivos</label>

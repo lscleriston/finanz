@@ -6,6 +6,7 @@ export interface Transaction {
   account_name: string;
   account_id?: number;
   date: string;
+  original_date?: string;
   description: string;
   amount: number;
   category: string;
@@ -98,9 +99,12 @@ export async function deleteAccount(id: number): Promise<void> {
   if (!res.ok) throw new Error("Erro ao excluir conta");
 }
 
-export async function importFiles(accountId: number, files: File[]): Promise<{ status: string; saved_files: string[]; imported_account_id: number; }> {
+export async function importFiles(accountId: number, files: File[], billingDate?: string): Promise<{ status: string; saved_files: string[]; imported_account_id: number; }> {
   const formData = new FormData();
   formData.append("account_id", String(accountId));
+  if (billingDate) {
+    formData.append("billing_date", billingDate);
+  }
   files.forEach((file) => formData.append("files", file));
   const res = await fetch(`${API_BASE}/api/import`, {
     method: "POST",

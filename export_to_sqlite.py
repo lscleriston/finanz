@@ -79,6 +79,22 @@ def _load_account_mappings() -> List[Dict[str, str]]:
     return []
 
 
+def _load_file_billing_date(path: Path) -> Optional[str]:
+    meta_path = path.with_name(path.name + ".meta.json")
+    if not meta_path.exists():
+        return None
+    try:
+        with meta_path.open("r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        due = metadata.get("due_date") or metadata.get("billing_date")
+        if due:
+            due = str(due).strip()
+            return due
+    except Exception:
+        pass
+    return None
+
+
 def _find_account_name(resource_path: str, default_name: Optional[str]) -> Optional[str]:
     mappings = _load_account_mappings()
     candidate = default_name
@@ -145,10 +161,12 @@ def create_db(conn: sqlite3.Connection) -> None:
     existing_cols = {row[1] for row in cur.fetchall()}
     if "account_id" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER")
+    if "original_date" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN original_date TEXT")
 
-    # Índice único para evitar duplicatas de linhas repetidas
+    # Índice único para evitar duplicatas de linhas repetidas, incluindo data original
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, date, description, amount)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, original_date, description, amount)"
     )
     conn.commit()
 
@@ -241,7 +259,7 @@ def _get_account_tipo(conn: sqlite3.Connection, account_id: int) -> Optional[str
     return row[0] if row else None
 
 
-def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> bool:
+def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]], due_date: Optional[str] = None) -> bool:
     account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
     account_id = row.get("account_id")
     account_tipo = None
@@ -266,6 +284,20 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
         print(f"Aviso: ignorando transação sem conta cadastrada: account_name={account_name}, date={row.get('date')}, desc={row.get('description')}")
         return False
 
+    original_date = row.get("date")
+    target_date = original_date
+    if account_tipo and account_tipo.lower() == "cartaocredito":
+        if due_date:
+            target_date = due_date
+        # reescreve descrição para manter referência à data oriiginal
+        if original_date and original_date != target_date:
+            orig_label = original_date
+            if "(" not in str(row.get("description") or ""):
+                row["description"] = f"{row.get('description', '').strip()} (orig: {orig_label})".strip()
+
+    if original_date is None:
+        original_date = target_date
+
     normalized_amount = _normalize_amount_for_account(
         account_tipo,
         account_name,
@@ -276,13 +308,14 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
 
     conn.execute(
         """
-        INSERT OR IGNORE INTO transactions (source_file, account_id, date, description, amount, category, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO transactions (source_file, account_id, date, original_date, description, amount, category, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_file,
             account_id,
-            row.get("date"),
+            target_date,
+            original_date,
             row.get("description"),
             normalized_amount,
             row.get("category"),
@@ -292,7 +325,7 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
     return True
 
 
-def consume_csv(path: Path, conn: sqlite3.Connection) -> int:
+def consume_csv(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
     with path.open("r", encoding="utf-8", errors="ignore") as f:
         reader = csv.DictReader(f)
         added = 0
@@ -306,13 +339,13 @@ def consume_csv(path: Path, conn: sqlite3.Connection) -> int:
             }
             if candidate["date"] is None and candidate["amount"] is None:
                 continue
-            if insert_transaction(conn, str(path), candidate):
+            if insert_transaction(conn, str(path), candidate, due_date=due_date):
                 added += 1
         conn.commit()
         return added
 
 
-def consume_json(path: Path, conn: sqlite3.Connection) -> int:
+def consume_json(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
     with path.open("r", encoding="utf-8", errors="ignore") as f:
         data = json.load(f)
     if isinstance(data, dict):
@@ -337,18 +370,18 @@ def consume_json(path: Path, conn: sqlite3.Connection) -> int:
         }
         if candidate["date"] is None and candidate["amount"] is None:
             continue
-        if insert_transaction(conn, str(path), candidate):
+        if insert_transaction(conn, str(path), candidate, due_date=due_date):
             added += 1
     conn.commit()
     return added
 
 
-def consume_txt(path: Path, conn: sqlite3.Connection) -> int:
+def consume_txt(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    return _consume_lines(lines, path, conn)
+    return _consume_lines(lines, path, conn, due_date)
 
 
-def _consume_lines(lines: List[str], path: Path, conn: sqlite3.Connection) -> int:
+def _consume_lines(lines: List[str], path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
     added = 0
     regex = re.compile(r"^(?P<date>\d{2}/\d{2}(?:/\d{2,4})?)\s+(?P<desc>.+?)\s+(?P<amount>[-+]?[,\.\d]+)$")
     for line in lines:
@@ -370,13 +403,13 @@ def _consume_lines(lines: List[str], path: Path, conn: sqlite3.Connection) -> in
             "category": "",
             "details": line,
         }
-        insert_transaction(conn, str(path), candidate)
-        added += 1
+        if insert_transaction(conn, str(path), candidate, due_date=due_date):
+            added += 1
     conn.commit()
     return added
 
 
-def consume_pdf(path: Path, conn: sqlite3.Connection) -> int:
+def consume_pdf(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
     # Extrai dados estruturados de tabela com pdfplumber quando disponível.
     try:
         import pdfplumber
@@ -426,7 +459,7 @@ def consume_pdf(path: Path, conn: sqlite3.Connection) -> int:
                             "category": "",
                             "details": json.dumps(linha, ensure_ascii=False),
                         }
-                        if insert_transaction(conn, str(path), candidate):
+                        if insert_transaction(conn, str(path), candidate, due_date=due_date):
                             inserted += 1
 
             if inserted > 0:
@@ -477,6 +510,7 @@ def _extract_account_info(path: Path) -> Dict[str, Optional[str]]:
 
 def process_file(path: Path, conn: sqlite3.Connection, force_account_name: Optional[str] = None) -> int:
     account_info = _extract_account_info(path)
+    due_date = _load_file_billing_date(path)
     ext = path.suffix.lower()
 
     global _CURRENT_ACCOUNT_NAME
@@ -485,13 +519,13 @@ def process_file(path: Path, conn: sqlite3.Connection, force_account_name: Optio
 
     try:
         if ext in {".csv", ".tsv"}:
-            return consume_csv(path, conn)
+            return consume_csv(path, conn, due_date)
         if ext == ".json":
-            return consume_json(path, conn)
+            return consume_json(path, conn, due_date)
         if ext in {".txt", ".log"}:
-            return consume_txt(path, conn)
+            return consume_txt(path, conn, due_date)
         if ext == ".pdf":
-            return consume_pdf(path, conn)
+            return consume_pdf(path, conn, due_date)
         return 0
     finally:
         _CURRENT_ACCOUNT_NAME = old_account_name

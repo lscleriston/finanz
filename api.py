@@ -6,6 +6,7 @@ import json
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
@@ -40,6 +41,7 @@ class Transaction(BaseModel):
     account_name: Optional[str]
     account_id: Optional[int]
     date: Optional[str]
+    original_date: Optional[str]
     description: Optional[str]
     amount: Optional[float]
     category: Optional[str]
@@ -71,6 +73,7 @@ class TransactionCreate(BaseModel):
     account_name: Optional[str] = None
     account_id: Optional[int] = None
     date: Optional[str] = None
+    original_date: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[float] = None
     category: Optional[str] = None
@@ -248,6 +251,7 @@ def reload_data():
 @app.post("/api/import")
 async def import_files(
     account_id: int = Form(...),
+    billing_date: Optional[str] = Form(None),
     files: List[UploadFile] = File(...),
 ):
     if not DB_PATH.exists():
@@ -257,7 +261,18 @@ async def import_files(
     if not acc:
         raise HTTPException(status_code=404, detail="Conta não encontrada")
 
-    account_path = acc[0]["path"]
+    account = acc[0]
+    account_path = account["path"]
+    account_tipo = str(account.get("tipo") or "").strip().lower()
+
+    if account_tipo == "cartaocredito":
+        if not billing_date:
+            raise HTTPException(status_code=400, detail="Para contas CartaoCredito, informe billing_date")
+        try:
+            datetime.fromisoformat(billing_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="billing_date deve estar no formato yyyy-mm-dd")
+
     target_folder = Path(account_path)
     if not target_folder.is_absolute():
         target_folder = BASE_DIR / "export" / target_folder
@@ -271,6 +286,14 @@ async def import_files(
             with out_path.open("wb") as f:
                 shutil.copyfileobj(file.file, f)
             saved_files.append(str(out_path))
+
+            if account_tipo == "cartaocredito":
+                meta = {
+                    "due_date": billing_date,
+                }
+                meta_path = out_path.with_name(out_path.name + ".meta.json")
+                with meta_path.open("w", encoding="utf-8") as mf:
+                    json.dump(meta, mf, ensure_ascii=False)
         finally:
             file.file.close()
 
@@ -322,6 +345,7 @@ def get_transactions(
         a.name AS account_name,
         t.account_id,
         t.date,
+        t.original_date,
         t.description,
         t.amount,
         t.category,
@@ -351,13 +375,14 @@ def create_transaction(tx: TransactionCreate):
         cur = db.cursor()
         cur.execute(
             """
-            INSERT INTO transactions (source_file, account_id, date, description, amount, category, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (source_file, account_id, date, original_date, description, amount, category, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tx.source_file,
                 tx.account_id,
                 tx.date,
+                tx.original_date or tx.date,
                 tx.description,
                 tx.amount,
                 tx.category,

@@ -311,6 +311,7 @@ export default function Dashboard() {
                 <TableHead className="w-16">ID</TableHead>
                 <TableHead>Conta</TableHead>
                 <TableHead className="w-28">Data</TableHead>
+                <TableHead className="w-32">Data Orig</TableHead>
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-right w-32">Valor</TableHead>
                 <TableHead className="w-36">Categoria</TableHead>
@@ -321,7 +322,7 @@ export default function Dashboard() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <TableCell key={j}>
                         <div className="h-4 w-full animate-pulse rounded bg-muted" />
                       </TableCell>
@@ -330,7 +331,7 @@ export default function Dashboard() {
                 ))
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                     Nenhuma transação encontrada.
                   </TableCell>
                 </TableRow>
@@ -346,6 +347,7 @@ export default function Dashboard() {
                       <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
                       <TableCell className="font-medium">{tx.account_name || "-"}</TableCell>
                       <TableCell className="font-mono text-sm">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="font-mono text-sm">{tx.original_date ? formatDate(tx.original_date) : "-"}</TableCell>
                       <TableCell className="max-w-[280px] truncate">{tx.description}</TableCell>
                       <TableCell className={`text-right font-mono font-semibold ${tx.amount < 0 ? "text-danger" : "text-success"}`}>
                         {formatCurrency(tx.amount)}
