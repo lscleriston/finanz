@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchTransactions, fetchSummary, type Transaction, type Summary } from "@/lib/api";
+import { fetchTransactions, fetchSummary, createTransaction, deleteTransaction, type Transaction, type Summary } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newCategory, setNewCategory] = useState("");
   const offsetRef = useRef(0);
 
   const loadPage = useCallback(
@@ -85,6 +89,55 @@ export default function Dashboard() {
     loadPage(true);
   };
 
+  const handleAddTransaction = async () => {
+    if (!newDate || !newDescription || !newAmount) {
+      alert("Preencha data, descrição e valor para adicionar.");
+      return;
+    }
+
+    const parsedAmount = Number(newAmount.toString().replace(',', '.'));
+    if (Number.isNaN(parsedAmount)) {
+      alert("Valor inválido");
+      return;
+    }
+
+    try {
+      await createTransaction({
+        account_name: "CartaoCredito/Bradesco",
+        date: newDate,
+        description: newDescription,
+        amount: parsedAmount,
+        category: newCategory,
+        source_file: "manual",
+      });
+      setNewDate("");
+      setNewDescription("");
+      setNewAmount("");
+      setNewCategory("");
+      setHasMore(true);
+      setTransactions([]);
+      offsetRef.current = 0;
+      loadPage(true);
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao adicionar transação: " + e);
+    }
+  };
+
+  const handleDeleteTransaction = async (id: number) => {
+    if (!window.confirm("Excluir transação id " + id + "?")) return;
+
+    try {
+      await deleteTransaction(id);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      const sum = await fetchSummary();
+      setSummary(sum);
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao excluir transação: " + e);
+    }
+  };
+
   useEffect(() => {
     const onScroll = () => {
       if (loading || loadingMore || !hasMore) return;
@@ -129,6 +182,29 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Manual entry */}
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3 p-4">
+          <div className="flex-1 min-w-[160px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Data</label>
+            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+          </div>
+          <div className="flex-1 min-w-[280px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Descrição</label>
+            <Input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
+          </div>
+          <div className="min-w-[120px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Valor</label>
+            <Input value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+          </div>
+          <div className="min-w-[140px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Categoria</label>
+            <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+          </div>
+          <Button onClick={handleAddTransaction}>Adicionar lançamento</Button>
+        </CardContent>
+      </Card>
+
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
@@ -141,6 +217,7 @@ export default function Dashboard() {
                 <TableHead>Descrição</TableHead>
                 <TableHead className="text-right w-32">Valor</TableHead>
                 <TableHead className="w-36">Categoria</TableHead>
+                <TableHead className="w-24">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -182,6 +259,15 @@ export default function Dashboard() {
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => handleDeleteTransaction(tx.id)}
+                      >
+                        Excluir
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

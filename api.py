@@ -17,7 +17,14 @@ app = FastAPI(title="Finanz API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,6 +46,16 @@ class Transaction(BaseModel):
 class AccountMapping(BaseModel):
     path: str
     name: str
+
+
+class TransactionCreate(BaseModel):
+    source_file: Optional[str] = None
+    account_name: Optional[str] = None
+    date: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    details: Optional[str] = None
 
 
 MAPPING_FILE = DATA_DIR / "account_mappings.json"
@@ -156,6 +173,60 @@ def get_transactions(
         return _query(sql, tuple(params))
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/transactions", response_model=Transaction)
+def create_transaction(tx: TransactionCreate):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    db = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = db.cursor()
+        cur.execute(
+            """
+            INSERT INTO transactions (source_file, account_name, date, description, amount, category, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tx.source_file,
+                tx.account_name,
+                tx.date,
+                tx.description,
+                tx.amount,
+                tx.category,
+                tx.details,
+            ),
+        )
+        db.commit()
+        new_id = cur.lastrowid
+        row = _query("SELECT * FROM transactions WHERE id = ?", (new_id,))[0]
+        return row
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/api/transactions")
+def delete_transaction(id: int = Query(..., ge=1)):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    db = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = db.cursor()
+        cur.execute("DELETE FROM transactions WHERE id = ?", (id,))
+        db.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Transação com id {id} não encontrada")
+        return {"status": "deleted", "id": id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 
 @app.get("/api/summary")
