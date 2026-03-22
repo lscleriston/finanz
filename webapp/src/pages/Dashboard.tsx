@@ -205,6 +205,8 @@ export default function Transactions() {
     ? transactions.filter((tx) => tx.account_id && accountFilterIds.includes(tx.account_id))
     : transactions;
 
+  const filteredTotalAmount = filteredTransactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
   const groupedTransactions = filteredTransactions.reduce((acc, tx) => {
     const key = tx.date || "Sem data";
     if (!acc[key]) acc[key] = [];
@@ -344,7 +346,7 @@ export default function Transactions() {
             <div className="flex-1">
               <Table>
                 <TableCaption>
-                  Total acumulado: <strong>{formatCurrency(summary?.total_amount ?? 0)}</strong>
+                  Total acumulado: <strong>{formatCurrency(filteredTotalAmount)}</strong>
                 </TableCaption>
                 <TableHeader>
               <TableRow>
