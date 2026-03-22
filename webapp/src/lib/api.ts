@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8010"; // backend está no 8010 quando 8000 ocupado
 
 export interface Transaction {
   id: number;
