@@ -197,6 +197,15 @@ export default function Dashboard() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [hasMore, loading, loadingMore, loadPage]);
 
+  const groupedTransactions = transactions.reduce((acc, tx) => {
+    const key = tx.date || "Sem data";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(tx);
+    return acc;
+  }, {} as Record<string, Transaction[]>);
+
+  const dates = Object.keys(groupedTransactions).sort((a, b) => (a < b ? 1 : -1));
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -320,43 +329,52 @@ export default function Dashboard() {
                 ))
               ) : transactions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
                     Nenhuma transação encontrada.
                   </TableCell>
                 </TableRow>
               ) : (
-                transactions.map((tx) => (
-                  <TableRow key={tx.id} className="hover:bg-muted/50">
-                    <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
-                    <TableCell className="font-medium">{tx.account_name || "-"}</TableCell>
-                    <TableCell className="font-mono text-sm">{formatDate(tx.date)}</TableCell>
-                    <TableCell className="max-w-[280px] truncate">{tx.description}</TableCell>
-                    <TableCell
-                      className={`text-right font-mono font-semibold ${
-                        tx.amount < 0 ? "text-danger" : "text-success"
-                      }`}
-                    >
-                      {formatCurrency(tx.amount)}
-                    </TableCell>
-                    <TableCell>
-                      {tx.category ? (
-                        <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                          {tx.category}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => handleDeleteTransaction(tx.id)}
-                      >
-                        Excluir
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                dates.map((date) => (
+                  <React.Fragment key={date}>
+                    <TableRow className="bg-muted/10">
+                      <TableCell colSpan={7} className="font-semibold">
+                        {date === "Sem data" ? "Sem data" : formatDate(date)}
+                      </TableCell>
+                    </TableRow>
+                    {groupedTransactions[date].map((tx) => (
+                      <TableRow key={tx.id} className="hover:bg-muted/50">
+                        <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
+                        <TableCell className="font-medium">{tx.account_name || "-"}</TableCell>
+                        <TableCell className="font-mono text-sm">{formatDate(tx.date)}</TableCell>
+                        <TableCell className="max-w-[280px] truncate">{tx.description}</TableCell>
+                        <TableCell
+                          className={`text-right font-mono font-semibold ${
+                            tx.amount < 0 ? "text-danger" : "text-success"
+                          }`}
+                        >
+                          {formatCurrency(tx.amount)}
+                        </TableCell>
+                        <TableCell>
+                          {tx.category ? (
+                            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                              {tx.category}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                          >
+                            Excluir
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </React.Fragment>
                 ))
               )}
             </TableBody>
