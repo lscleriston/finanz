@@ -8,6 +8,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableCaption,
   TableHead,
   TableHeader,
   TableRow,
@@ -302,6 +303,9 @@ export default function Dashboard() {
       <Card>
         <CardContent className="p-0 overflow-auto">
           <Table>
+            <TableCaption>
+              Total acumulado: <strong>{formatCurrency(summary?.total_amount ?? 0)}</strong>
+            </TableCaption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16">ID</TableHead>
