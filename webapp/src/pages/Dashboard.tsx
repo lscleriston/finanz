@@ -344,10 +344,11 @@ export default function Transactions() {
               </button>
             </aside>
             <div className="flex-1">
+              <div className="p-4 border-b bg-background/50">
+                <span className="text-sm font-medium">Total acumulado:</span>
+                <span className="ml-2 text-lg font-bold">{formatCurrency(filteredTotalAmount)}</span>
+              </div>
               <Table>
-                <TableCaption>
-                  Total acumulado: <strong>{formatCurrency(filteredTotalAmount)}</strong>
-                </TableCaption>
                 <TableHeader>
               <TableRow>
                 <TableHead className="w-16">ID</TableHead>
