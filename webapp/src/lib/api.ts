@@ -116,6 +116,7 @@ export async function importFiles(accountId: number, files: File[]): Promise<{ s
 export async function createTransaction(data: {
   source_file?: string;
   account_name?: string;
+  account_id?: number;
   date?: string;
   description?: string;
   amount?: number;

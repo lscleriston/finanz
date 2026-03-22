@@ -79,7 +79,7 @@ export default function Dashboard() {
         setLoadingMore(false);
       }
     },
-    [dateFrom, dateTo, q]
+    [dateFrom, dateTo, hasMore, q]
   );
 
   useEffect(() => {
@@ -124,18 +124,19 @@ export default function Dashboard() {
     try {
       await createTransaction({
         account_id: selectedAccountId,
-        account_name:
-          accounts.find((c) => c.id === selectedAccountId)?.name || "CartaoCredito/Bradesco",
+        account_name: accounts.find((c) => c.id === selectedAccountId)?.name || "-",
         date: newDate,
         description: newDescription,
         amount: parsedAmount,
         category: newCategory,
         source_file: "manual",
       });
+
       setNewDate("");
       setNewDescription("");
       setNewAmount("");
       setNewCategory("");
+
       setHasMore(true);
       setTransactions([]);
       offsetRef.current = 0;
@@ -255,9 +256,7 @@ export default function Dashboard() {
               onChange={(e) => setNewAccountInvert(e.target.checked)}
               className="h-4 w-4 rounded border"
             />
-            <label htmlFor="new-account-invert" className="text-xs text-muted-foreground">
-              Inverter valores importados
-            </label>
+            <label htmlFor="new-account-invert" className="text-xs text-muted-foreground">Inverter valores importados</label>
           </div>
           <Button onClick={handleCreateAccount}>Criar conta</Button>
         </CardContent>
@@ -275,9 +274,7 @@ export default function Dashboard() {
             >
               <option value="">Selecionar conta</option>
               {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name}
-                </option>
+                <option key={acc.id} value={acc.id}>{acc.name}</option>
               ))}
             </select>
           </div>
@@ -301,9 +298,9 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Table */}
+      {/* Transactions table */}
       <Card>
-        <div className="overflow-x-auto">
+        <CardContent className="p-0 overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -320,7 +317,7 @@ export default function Dashboard() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <TableCell key={j}>
                         <div className="h-4 w-full animate-pulse rounded bg-muted" />
                       </TableCell>
@@ -334,63 +331,40 @@ export default function Dashboard() {
                   </TableCell>
                 </TableRow>
               ) : (
-                dates.map((date) => (
-                  <React.Fragment key={date}>
-                    <TableRow className="bg-muted/10">
-                      <TableCell colSpan={7} className="font-semibold">
-                        {date === "Sem data" ? "Sem data" : formatDate(date)}
+                dates.flatMap((date) => [
+                  <TableRow key={`${date}-header`} className="bg-muted/10">
+                    <TableCell colSpan={7} className="font-semibold">
+                      {date === "Sem data" ? "Sem data" : formatDate(date)}
+                    </TableCell>
+                  </TableRow>,
+                  ...groupedTransactions[date].map((tx) => (
+                    <TableRow key={tx.id} className="hover:bg-muted/50">
+                      <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
+                      <TableCell className="font-medium">{tx.account_name || "-"}</TableCell>
+                      <TableCell className="font-mono text-sm">{formatDate(tx.date)}</TableCell>
+                      <TableCell className="max-w-[280px] truncate">{tx.description}</TableCell>
+                      <TableCell className={`text-right font-mono font-semibold ${tx.amount < 0 ? "text-danger" : "text-success"}`}>
+                        {formatCurrency(tx.amount)}
+                      </TableCell>
+                      <TableCell>
+                        {tx.category ? (
+                          <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">{tx.category}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteTransaction(tx.id)}>
+                          Excluir
+                        </Button>
                       </TableCell>
                     </TableRow>
-                    {groupedTransactions[date].map((tx) => (
-                      <TableRow key={tx.id} className="hover:bg-muted/50">
-                        <TableCell className="font-mono text-xs text-muted-foreground">{tx.id}</TableCell>
-                        <TableCell className="font-medium">{tx.account_name || "-"}</TableCell>
-                        <TableCell className="font-mono text-sm">{formatDate(tx.date)}</TableCell>
-                        <TableCell className="max-w-[280px] truncate">{tx.description}</TableCell>
-                        <TableCell
-                          className={`text-right font-mono font-semibold ${
-                            tx.amount < 0 ? "text-danger" : "text-success"
-                          }`}
-                        >
-                          {formatCurrency(tx.amount)}
-                        </TableCell>
-                        <TableCell>
-                          {tx.category ? (
-                            <span className="inline-block rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                              {tx.category}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            onClick={() => handleDeleteTransaction(tx.id)}
-                          >
-                            Excluir
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </React.Fragment>
-                ))
+                  )),
+                ])
               )}
             </TableBody>
-            <tfoot>
-              <TableRow>
-                <TableCell colSpan={4} className="text-right font-semibold">
-                  Total acumulado:
-                </TableCell>
-                <TableCell className="text-right font-semibold">
-                  {formatCurrency(summary?.total_amount ?? 0)}
-                </TableCell>
-                <TableCell />
-              </TableRow>
-            </tfoot>
           </Table>
-        </div>
+        </CardContent>
 
         <div className="flex items-center justify-between border-t px-4 py-3">
           <p className="text-sm text-muted-foreground">
@@ -402,6 +376,13 @@ export default function Dashboard() {
           </p>
         </div>
       </Card>
+
+      {hasMore && !loadingMore && (
+        <div className="flex justify-center">
+          <Button onClick={() => loadPage(false)}>Carregar mais</Button>
+        </div>
+      )}
+      {loadingMore && <p className="text-center text-sm text-muted-foreground">Carregando mais transações...</p>}
     </div>
   );
 }
