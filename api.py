@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "transactions.db"
+DB_PATH = DATA_DIR / "finanzdb"
 
 app = FastAPI(title="Finanz API", version="1.0")
 
@@ -228,7 +228,24 @@ def get_transactions(
     if where_clause:
         where_clause = "WHERE " + where_clause
 
-    sql = f"SELECT * FROM transactions {where_clause} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?"
+    sql = f"""
+    SELECT
+        t.id,
+        t.source_file,
+        a.name AS account_name,
+        t.account_id,
+        t.date,
+        t.description,
+        t.amount,
+        t.category,
+        t.details,
+        t.inserted_at
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    {where_clause}
+    ORDER BY t.date DESC, t.id DESC
+    LIMIT ? OFFSET ?
+    """
     params += [limit, offset]
 
     try:
@@ -247,12 +264,11 @@ def create_transaction(tx: TransactionCreate):
         cur = db.cursor()
         cur.execute(
             """
-            INSERT INTO transactions (source_file, account_name, account_id, date, description, amount, category, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (source_file, account_id, date, description, amount, category, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tx.source_file,
-                tx.account_name,
                 tx.account_id,
                 tx.date,
                 tx.description,

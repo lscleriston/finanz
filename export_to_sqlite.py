@@ -17,7 +17,7 @@ from typing import Optional, Dict, List
 BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "export"
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "transactions.db"
+DB_PATH = DATA_DIR / "finanzdb"
 MAPPING_FILE = DATA_DIR / "account_mappings.json"
 
 
@@ -109,7 +109,6 @@ def create_db(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_file TEXT,
-            account_name TEXT,
             account_id INTEGER,
             date TEXT,
             description TEXT,
@@ -126,14 +125,12 @@ def create_db(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
     cur.execute("PRAGMA table_info(transactions)")
     existing_cols = {row[1] for row in cur.fetchall()}
-    if "account_name" not in existing_cols:
-        conn.execute("ALTER TABLE transactions ADD COLUMN account_name TEXT")
     if "account_id" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER")
 
     # Índice único para evitar duplicatas de linhas repetidas
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_name, date, description, amount)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, date, description, amount)"
     )
     conn.commit()
 
@@ -189,12 +186,11 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
 
     conn.execute(
         """
-        INSERT OR IGNORE INTO transactions (source_file, account_name, account_id, date, description, amount, category, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO transactions (source_file, account_id, date, description, amount, category, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_file,
-            account_name,
             account_id,
             row.get("date"),
             row.get("description"),
