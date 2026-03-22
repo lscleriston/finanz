@@ -17,7 +17,7 @@ from typing import Optional, Dict, List
 BASE_DIR = Path(__file__).resolve().parent
 EXPORT_DIR = BASE_DIR / "export"
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "finanzdb"
+DB_PATH = DATA_DIR / "finanzdb.db"
 MAPPING_FILE = DATA_DIR / "account_mappings.json"
 
 

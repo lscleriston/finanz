@@ -7,7 +7,7 @@ Aplicação para importação e análise de transações financeiras de múltipl
 - Importação automática de extratos CSV / JSON / TXT / PDF (pdfplumber / PyPDF2)
 - Normalização de valores (brasileiro: `1.234,56`) em número flutuante
 - Regras específicas para cartões de crédito Bradesco (sinal invertido)
-- Armazenamento em SQLite (`data/finanzdb`)
+- Armazenamento em SQLite (`data/finanzdb.db`)
 - API REST com FastAPI para consulta e manipulação:
   - `GET /api/transactions`
   - `GET /api/summary`
@@ -51,7 +51,7 @@ Aplicação para importação e análise de transações financeiras de múltipl
    uvicorn api:app --reload
    ```
 
-> Nota: agora o banco está em `data/finanzdb` (e não mais `data/transactions.db`).5. Iniciar frontend:
+> Nota: agora o banco está em `data/finanzdb.db` (e não mais `data/transactions.db`).5. Iniciar frontend:
    ```bash
    cd webapp
    npm run dev

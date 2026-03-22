@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "finanzdb"
+DB_PATH = DATA_DIR / "finanzdb.db"
 
 app = FastAPI(title="Finanz API", version="1.0")
 
