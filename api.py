@@ -3,6 +3,7 @@
 from pathlib import Path
 import sqlite3
 import json
+import re
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -53,11 +54,12 @@ class Account(BaseModel):
     id: int
     name: str
     path: str
+    tipo: str
 
 
 class AccountCreate(BaseModel):
     name: str
-    path: str
+    tipo: str
 
 
 class TransactionCreate(BaseModel):
@@ -106,6 +108,15 @@ def _write_mappings(mappings: List[dict]) -> None:
         json.dump(mappings, f, ensure_ascii=False, indent=2)
 
 
+def _slugify(value: str) -> str:
+    s = value.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")
+    if not s:
+        return "account"
+    return s
+
+
 @app.get("/api/account-mappings", response_model=List[AccountMapping])
 def get_account_mappings():
     return _read_mappings()
@@ -152,22 +163,31 @@ def get_accounts():
 def create_account(account: AccountCreate):
     if not DB_PATH.exists():
         raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
-    if not account.name.strip() or not account.path.strip():
-        raise HTTPException(status_code=400, detail="Nome da conta e pasta não podem ser vazios")
+    if not account.name.strip() or not account.tipo.strip():
+        raise HTTPException(status_code=400, detail="Nome da conta e tipo não podem ser vazios")
+
+    name = account.name.strip()
+    tipo = account.tipo.strip()
+    slug_name = _slugify(name)
+    normalized_tipo = _slugify(tipo)
+
+    account_path = f"{normalized_tipo}/{slug_name}"
+    full_path = BASE_DIR / "export" / account_path
+    full_path.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(str(DB_PATH))
     try:
         cur = conn.cursor()
         cur.execute(
-            "INSERT OR IGNORE INTO accounts (name, path) VALUES (?, ?)",
-            (account.name.strip(), account.path.strip()),
+            "INSERT OR IGNORE INTO accounts (name, path, tipo) VALUES (?, ?, ?)",
+            (name, account_path, tipo),
         )
         conn.commit()
-        cur.execute("SELECT * FROM accounts WHERE name = ?", (account.name.strip(),))
+        cur.execute("SELECT * FROM accounts WHERE name = ?", (name,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=500, detail="Erro ao criar conta")
-        return {"id": row[0], "name": row[1], "path": row[2]}
+        return {"id": row[0], "name": row[1], "path": row[2], "tipo": row[3]}
     finally:
         conn.close()
 

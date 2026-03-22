@@ -16,6 +16,8 @@ export interface Transaction {
 export interface Account {
   id: number;
   name: string;
+  path: string;
+  tipo: string;
 }
 
 export interface Summary {
@@ -78,7 +80,7 @@ export async function fetchAccounts(): Promise<Account[]> {
   return res.json();
 }
 
-export async function createAccount(data: { name: string }): Promise<Account> {
+export async function createAccount(data: { name: string; tipo: string }): Promise<Account> {
   const res = await fetch(`${API_BASE}/api/accounts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

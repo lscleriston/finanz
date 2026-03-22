@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import {
-  fetchAccountMappings,
-  createAccountMapping,
-  deleteAccountMapping,
+  fetchAccounts,
+  createAccount,
+  deleteAccount,
   reloadData,
-  type AccountMapping,
+  type Account,
 } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,16 +21,16 @@ import { Trash2, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AccountMappings() {
-  const [mappings, setMappings] = useState<AccountMapping[]>([]);
-  const [path, setPath] = useState("");
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [tipo, setTipo] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
     try {
-      setMappings(await fetchAccountMappings());
+      setAccounts(await fetchAccounts());
     } catch {
-      toast.error("Erro ao carregar mapeamentos");
+      toast.error("Erro ao carregar contas");
     }
   };
 
@@ -39,28 +39,28 @@ export default function AccountMappings() {
   }, []);
 
   const handleSave = async () => {
-    if (!path.trim() || !name.trim()) {
-      toast.error("Preencha os dois campos");
+    if (!tipo.trim() || !name.trim()) {
+      toast.error("Preencha os campos tipo e nome");
       return;
     }
     try {
-      await createAccountMapping({ path: path.trim(), name: name.trim() });
-      toast.success("Mapeamento salvo!");
-      setPath("");
+      await createAccount({ name: name.trim(), tipo: tipo.trim() });
+      toast.success("Conta salva!");
+      setTipo("");
       setName("");
       load();
     } catch {
-      toast.error("Erro ao salvar mapeamento");
+      toast.error("Erro ao salvar conta");
     }
   };
 
-  const handleDelete = async (p: string) => {
+  const handleDelete = async (id: number) => {
     try {
-      await deleteAccountMapping(p);
-      toast.success("Mapeamento excluído");
+      await deleteAccount(id);
+      toast.success("Conta excluída");
       load();
     } catch {
-      toast.error("Erro ao excluir");
+      toast.error("Erro ao excluir conta");
     }
   };
 
@@ -86,11 +86,11 @@ export default function AccountMappings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Caminho da conta</label>
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Tipo da conta</label>
             <Input
-              placeholder="Ex: CartaoCredito/Bradesco"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
+              placeholder="Ex: CartaoCredito ou ContaCorrente"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
             />
           </div>
           <div>
@@ -120,28 +120,30 @@ export default function AccountMappings() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Caminho</TableHead>
+                    <TableHead>ID</TableHead>
                 <TableHead>Nome</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Pasta</TableHead>
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mappings.length === 0 ? (
+              {accounts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                    Nenhum mapeamento cadastrado.
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                    Nenhuma conta cadastrada.
                   </TableCell>
                 </TableRow>
               ) : (
-                mappings.map((m) => (
-                  <TableRow key={m.path}>
-                    <TableCell className="font-mono text-sm">{m.path}</TableCell>
-                    <TableCell>{m.name}</TableCell>
+                accounts.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="font-mono text-sm">{a.id}</TableCell>
+                    <TableCell>{a.name}</TableCell>                    <TableCell>{a.tipo}</TableCell>                    <TableCell className="font-mono text-sm">{a.path}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(m.path)}
+                        onClick={() => handleDelete(a.id)}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />

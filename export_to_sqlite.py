@@ -100,7 +100,8 @@ def create_db(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
-            path TEXT
+            path TEXT NOT NULL,
+            tipo TEXT NOT NULL
         )
         """
     )
@@ -110,6 +111,13 @@ def create_db(conn: sqlite3.Connection) -> None:
     account_cols = {row[1] for row in cur.fetchall()}
     if "path" not in account_cols:
         conn.execute("ALTER TABLE accounts ADD COLUMN path TEXT")
+    if "tipo" not in account_cols:
+        conn.execute("ALTER TABLE accounts ADD COLUMN tipo TEXT NOT NULL DEFAULT ''")
+
+    # Migração: para contas antigas sem tipo, extrai do path se possível
+    conn.execute(
+        "UPDATE accounts SET tipo = TRIM(SUBSTR(path, 1, INSTR(path, '/') - 1)) WHERE tipo='' AND path LIKE '%/%'"
+    )
 
     conn.execute(
         """

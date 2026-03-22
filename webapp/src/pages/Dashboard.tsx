@@ -25,9 +25,10 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [accounts, setAccounts] = useState<{ id: number; name: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string }[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
   const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountTipo, setNewAccountTipo] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -145,16 +146,17 @@ export default function Dashboard() {
   };
 
   const handleCreateAccount = async () => {
-    if (!newAccountName.trim()) {
-      alert("Informe o nome da conta");
+    if (!newAccountName.trim() || !newAccountTipo.trim()) {
+      alert("Informe o nome e o tipo da conta");
       return;
     }
 
     try {
-      const acc = await createAccount({ name: newAccountName.trim() });
+      const acc = await createAccount({ name: newAccountName.trim(), tipo: newAccountTipo.trim() });
       setAccounts((prev) => [...prev, acc]);
       setSelectedAccountId(acc.id);
       setNewAccountName("");
+      setNewAccountTipo("");
     } catch (e) {
       console.error(e);
       alert("Erro ao criar conta: " + e);
@@ -222,9 +224,13 @@ export default function Dashboard() {
       {/* Account registration */}
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <div className="flex-1 min-w-[300px]">
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nova conta</label>
-            <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Nome da conta" />
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Tipo da conta</label>
+            <Input value={newAccountTipo} onChange={(e) => setNewAccountTipo(e.target.value)} placeholder="CartaoCredito / ContaCorrente" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nome da conta</label>
+            <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Bradesco" />
           </div>
           <Button onClick={handleCreateAccount}>Criar conta</Button>
         </CardContent>
