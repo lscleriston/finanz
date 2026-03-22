@@ -18,6 +18,7 @@ export interface Account {
   name: string;
   path: string;
   tipo: string;
+  invert_values: boolean;
 }
 
 export interface Summary {
@@ -80,7 +81,7 @@ export async function fetchAccounts(): Promise<Account[]> {
   return res.json();
 }
 
-export async function createAccount(data: { name: string; tipo: string }): Promise<Account> {
+export async function createAccount(data: { name: string; tipo: string; invert_values?: boolean }): Promise<Account> {
   const res = await fetch(`${API_BASE}/api/accounts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

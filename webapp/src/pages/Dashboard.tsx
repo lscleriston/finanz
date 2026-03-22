@@ -25,10 +25,11 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string; invert_values: boolean }[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountTipo, setNewAccountTipo] = useState("");
+  const [newAccountInvert, setNewAccountInvert] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -152,11 +153,16 @@ export default function Dashboard() {
     }
 
     try {
-      const acc = await createAccount({ name: newAccountName.trim(), tipo: newAccountTipo.trim() });
+      const acc = await createAccount({
+        name: newAccountName.trim(),
+        tipo: newAccountTipo.trim(),
+        invert_values: newAccountInvert,
+      });
       setAccounts((prev) => [...prev, acc]);
       setSelectedAccountId(acc.id);
       setNewAccountName("");
       setNewAccountTipo("");
+      setNewAccountInvert(false);
     } catch (e) {
       console.error(e);
       alert("Erro ao criar conta: " + e);
@@ -231,6 +237,18 @@ export default function Dashboard() {
           <div className="flex-1 min-w-[220px]">
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nome da conta</label>
             <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Bradesco" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="new-account-invert"
+              type="checkbox"
+              checked={newAccountInvert}
+              onChange={(e) => setNewAccountInvert(e.target.checked)}
+              className="h-4 w-4 rounded border"
+            />
+            <label htmlFor="new-account-invert" className="text-xs text-muted-foreground">
+              Inverter valores importados
+            </label>
           </div>
           <Button onClick={handleCreateAccount}>Criar conta</Button>
         </CardContent>

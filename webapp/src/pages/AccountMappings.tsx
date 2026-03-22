@@ -24,6 +24,7 @@ export default function AccountMappings() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [tipo, setTipo] = useState("");
   const [name, setName] = useState("");
+  const [invertValues, setInvertValues] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
@@ -44,10 +45,11 @@ export default function AccountMappings() {
       return;
     }
     try {
-      await createAccount({ name: name.trim(), tipo: tipo.trim() });
+      await createAccount({ name: name.trim(), tipo: tipo.trim(), invert_values: invertValues });
       toast.success("Conta salva!");
       setTipo("");
       setName("");
+      setInvertValues(false);
       load();
     } catch {
       toast.error("Erro ao salvar conta");
@@ -101,6 +103,18 @@ export default function AccountMappings() {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="invert-values"
+              type="checkbox"
+              checked={invertValues}
+              onChange={(e) => setInvertValues(e.target.checked)}
+              className="h-4 w-4 rounded border"
+            />
+            <label htmlFor="invert-values" className="text-sm text-muted-foreground">
+              Inverter valor na importação (crédito/débito)
+            </label>
+          </div>
           <Button onClick={handleSave} className="w-full">
             <Plus className="mr-2 h-4 w-4" /> Salvar
           </Button>
@@ -123,6 +137,7 @@ export default function AccountMappings() {
                     <TableHead>ID</TableHead>
                 <TableHead>Nome</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Invertido?</TableHead>
                 <TableHead>Pasta</TableHead>
                 <TableHead className="w-16" />
               </TableRow>
@@ -130,7 +145,7 @@ export default function AccountMappings() {
             <TableBody>
               {accounts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     Nenhuma conta cadastrada.
                   </TableCell>
                 </TableRow>
@@ -138,7 +153,10 @@ export default function AccountMappings() {
                 accounts.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-mono text-sm">{a.id}</TableCell>
-                    <TableCell>{a.name}</TableCell>                    <TableCell>{a.tipo}</TableCell>                    <TableCell className="font-mono text-sm">{a.path}</TableCell>
+                    <TableCell>{a.name}</TableCell>
+                    <TableCell>{a.tipo}</TableCell>
+                    <TableCell>{a.invert_values ? "Sim" : "Não"}</TableCell>
+                    <TableCell className="font-mono text-sm">{a.path}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"

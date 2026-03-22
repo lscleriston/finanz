@@ -57,11 +57,13 @@ class Account(BaseModel):
     name: str
     path: str
     tipo: str
+    invert_values: bool
 
 
 class AccountCreate(BaseModel):
     name: str
     tipo: str
+    invert_values: bool = False
 
 
 class TransactionCreate(BaseModel):
@@ -181,15 +183,21 @@ def create_account(account: AccountCreate):
     try:
         cur = conn.cursor()
         cur.execute(
-            "INSERT OR IGNORE INTO accounts (name, path, tipo) VALUES (?, ?, ?)",
-            (name, account_path, tipo),
+            "INSERT OR IGNORE INTO accounts (name, path, tipo, invert_values) VALUES (?, ?, ?, ?)",
+            (name, account_path, tipo, int(account.invert_values)),
         )
         conn.commit()
         cur.execute("SELECT * FROM accounts WHERE name = ?", (name,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=500, detail="Erro ao criar conta")
-        return {"id": row[0], "name": row[1], "path": row[2], "tipo": row[3]}
+        return {
+            "id": row[0],
+            "name": row[1],
+            "path": row[2],
+            "tipo": row[3],
+            "invert_values": bool(row[4]),
+        }
     finally:
         conn.close()
 

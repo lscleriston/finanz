@@ -101,7 +101,8 @@ def create_db(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
             path TEXT NOT NULL,
-            tipo TEXT NOT NULL
+            tipo TEXT NOT NULL,
+            invert_values INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -113,6 +114,8 @@ def create_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE accounts ADD COLUMN path TEXT")
     if "tipo" not in account_cols:
         conn.execute("ALTER TABLE accounts ADD COLUMN tipo TEXT NOT NULL DEFAULT ''")
+    if "invert_values" not in account_cols:
+        conn.execute("ALTER TABLE accounts ADD COLUMN invert_values INTEGER NOT NULL DEFAULT 0")
 
     # Migração: para contas antigas sem tipo, extrai do path se possível
     conn.execute(
@@ -153,51 +156,122 @@ def create_db(conn: sqlite3.Connection) -> None:
 _CURRENT_ACCOUNT_NAME: Optional[str] = None
 
 
-def _normalize_amount_for_account(account_name: Optional[str], description: Optional[str], amount: Optional[float]) -> Optional[float]:
+def _normalize_amount_for_account(
+    account_tipo: Optional[str],
+    account_name: Optional[str],
+    description: Optional[str],
+    amount: Optional[float],
+    invert_values: bool = False,
+) -> Optional[float]:
     if amount is None:
         return None
 
+    if not account_tipo and not account_name:
+        value = amount
+    else:
+        lower_tipo = (account_tipo or "").strip().lower()
+        lower_name = (account_name or "").strip().lower()
+
+        is_card = any(x in lower_tipo for x in ["cartao", "cartão", "cartãocredito"]) or any(
+            x in lower_name for x in ["cartao", "cartão", "cartãocredito"]
+        )
+
+        if is_card:
+            # Para contas de cartão de crédito:
+            # - valores positivos no extrato são despesas (débito) -> armazenar negativo
+            # - valores negativos no extrato são créditos/pagamentos -> armazenar positivo
+            if amount > 0:
+                value = -abs(amount)
+            elif amount < 0:
+                value = abs(amount)
+            else:
+                value = 0.0
+        else:
+            value = amount
+
+    if invert_values and value is not None and value != 0:
+        return -value
+
+    return value
+
+
+def _get_account_info(conn: sqlite3.Connection, account_name: Optional[str]) -> Optional[Dict[str, Optional[str]]]:
     if not account_name:
-        return amount
+        return None
 
-    lower_name = account_name.lower()
-    lower_desc = (description or "").strip().lower()
+    normalized = account_name.strip("/ ")
+    lower_norm = normalized.lower()
 
-    # Para contas de cartão de crédito, os lançamentos de despesa no extrato
-    # podem estar positivos e devem ser tratados como negativo na contabilidade.
-    if "cartao" in lower_name or "cartão" in lower_name or "cartãocredito" in lower_name:
-        # Para contas de cartão de crédito Bradesco:
-        # - valores positivos no extrato são despesas (débito) -> armazenar negativo
-        # - valores negativos no extrato são créditos/pagamentos -> armazenar positivo
-        if amount > 0:
-            return -abs(amount)
-        if amount < 0:
-            return abs(amount)
-        return 0.0
+    cur = conn.cursor()
+    # 1) procurar por nome exato (case insensitive)
+    cur.execute("SELECT id, name, tipo, path, invert_values FROM accounts WHERE lower(name) = ?", (lower_norm,))
+    row = cur.fetchone()
+    if row:
+        return {"id": row[0], "name": row[1], "tipo": row[2], "path": row[3], "invert_values": bool(row[4])}
 
-    return amount
+    # 2) procurar por path exato
+    cur.execute("SELECT id, name, tipo, path, invert_values FROM accounts WHERE lower(path) = ?", (lower_norm,))
+    row = cur.fetchone()
+    if row:
+        return {"id": row[0], "name": row[1], "tipo": row[2], "path": row[3], "invert_values": bool(row[4])}
+
+    # 3) tentar com última parte de path
+    if "/" in normalized:
+        final = normalized.split("/")[-1].strip().lower()
+        cur.execute("SELECT id, name, tipo, path, invert_values FROM accounts WHERE lower(name) = ?", (final,))
+        row = cur.fetchone()
+        if row:
+            return {"id": row[0], "name": row[1], "tipo": row[2], "path": row[3], "invert_values": bool(row[4])}
+
+    return None
 
 
 def _get_account_id(conn: sqlite3.Connection, account_name: Optional[str]) -> Optional[int]:
-    if not account_name:
-        return None
+    account = _get_account_info(conn, account_name)
+    if account:
+        return account.get("id")
+    return None
+
+
+def _get_account_tipo(conn: sqlite3.Connection, account_id: int) -> Optional[str]:
     cur = conn.cursor()
-    cur.execute("SELECT id FROM accounts WHERE name = ?", (account_name,))
+    cur.execute("SELECT tipo FROM accounts WHERE id = ?", (account_id,))
     row = cur.fetchone()
     return row[0] if row else None
 
 
 def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> bool:
     account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
-    normalized_amount = _normalize_amount_for_account(account_name, row.get("description"), row.get("amount"))
     account_id = row.get("account_id")
-    if account_id is None:
-        account_id = _get_account_id(conn, account_name)
+    account_tipo = None
+
+    account_invert = False
+    if account_id is not None:
+        account_tipo = _get_account_tipo(conn, account_id)
+        cur = conn.cursor()
+        cur.execute("SELECT invert_values FROM accounts WHERE id = ?", (account_id,))
+        row_iv = cur.fetchone()
+        if row_iv is not None:
+            account_invert = bool(row_iv[0])
+    else:
+        account_info = _get_account_info(conn, account_name)
+        if account_info:
+            account_id = account_info.get("id")
+            account_tipo = account_info.get("tipo")
+            account_invert = bool(account_info.get("invert_values", False))
 
     if account_id is None:
         # Não processa transação sem conta cadastrada
         print(f"Aviso: ignorando transação sem conta cadastrada: account_name={account_name}, date={row.get('date')}, desc={row.get('description')}")
         return False
+
+    normalized_amount = _normalize_amount_for_account(
+        account_tipo,
+        account_name,
+        row.get("description"),
+        row.get("amount"),
+        invert_values=account_invert,
+    )
 
     conn.execute(
         """
