@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchTransactions, fetchSummary, createTransaction, deleteTransaction, type Transaction, type Summary } from "@/lib/api";
+import { fetchTransactions, fetchSummary, fetchAccounts, createAccount, createTransaction, deleteTransaction, type Transaction, type Summary } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [accounts, setAccounts] = useState<{ id: number; name: string }[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
+  const [newAccountName, setNewAccountName] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -79,6 +82,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadPage(true);
+
+    async function loadAccounts() {
+      try {
+        const data = await fetchAccounts();
+        setAccounts(data);
+        if (data.length > 0 && selectedAccountId === undefined) {
+          setSelectedAccountId(data[0].id);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    loadAccounts();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -103,7 +121,9 @@ export default function Dashboard() {
 
     try {
       await createTransaction({
-        account_name: "CartaoCredito/Bradesco",
+        account_id: selectedAccountId,
+        account_name:
+          accounts.find((c) => c.id === selectedAccountId)?.name || "CartaoCredito/Bradesco",
         date: newDate,
         description: newDescription,
         amount: parsedAmount,
@@ -121,6 +141,23 @@ export default function Dashboard() {
     } catch (e) {
       console.error(e);
       alert("Erro ao adicionar transação: " + e);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    if (!newAccountName.trim()) {
+      alert("Informe o nome da conta");
+      return;
+    }
+
+    try {
+      const acc = await createAccount({ name: newAccountName.trim() });
+      setAccounts((prev) => [...prev, acc]);
+      setSelectedAccountId(acc.id);
+      setNewAccountName("");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao criar conta: " + e);
     }
   };
 
@@ -182,9 +219,35 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Account registration */}
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3 p-4">
+          <div className="flex-1 min-w-[300px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nova conta</label>
+            <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Nome da conta" />
+          </div>
+          <Button onClick={handleCreateAccount}>Criar conta</Button>
+        </CardContent>
+      </Card>
+
       {/* Manual entry */}
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 p-4">
+          <div className="min-w-[220px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Conta</label>
+            <select
+              value={selectedAccountId ?? ""}
+              onChange={(e) => setSelectedAccountId(Number(e.target.value))}
+              className="w-full rounded border p-2"
+            >
+              <option value="">Selecionar conta</option>
+              {accounts.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex-1 min-w-[160px]">
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Data</label>
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />

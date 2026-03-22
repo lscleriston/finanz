@@ -97,16 +97,27 @@ def _find_account_name(resource_path: str, default_name: Optional[str]) -> Optio
 def create_db(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+        """
+    )
+
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             source_file TEXT,
             account_name TEXT,
+            account_id INTEGER,
             date TEXT,
             description TEXT,
             amount REAL,
             category TEXT,
             details TEXT,
-            inserted_at TEXT DEFAULT CURRENT_TIMESTAMP
+            inserted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(account_id) REFERENCES accounts(id)
         )
         """
     )
@@ -117,6 +128,8 @@ def create_db(conn: sqlite3.Connection) -> None:
     existing_cols = {row[1] for row in cur.fetchall()}
     if "account_name" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_name TEXT")
+    if "account_id" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER")
 
     # Índice único para evitar duplicatas de linhas repetidas
     conn.execute(
@@ -153,18 +166,35 @@ def _normalize_amount_for_account(account_name: Optional[str], description: Opti
     return amount
 
 
+def _get_or_create_account_id(conn: sqlite3.Connection, account_name: Optional[str]) -> Optional[int]:
+    if not account_name:
+        return None
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM accounts WHERE name = ?", (account_name,))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    cur.execute("INSERT INTO accounts (name) VALUES (?)", (account_name,))
+    conn.commit()
+    return cur.lastrowid
+
+
 def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> None:
     account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
     normalized_amount = _normalize_amount_for_account(account_name, row.get("description"), row.get("amount"))
+    account_id = row.get("account_id")
+    if account_id is None:
+        account_id = _get_or_create_account_id(conn, account_name)
 
     conn.execute(
         """
-        INSERT OR IGNORE INTO transactions (source_file, account_name, date, description, amount, category, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO transactions (source_file, account_name, account_id, date, description, amount, category, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_file,
             account_name,
+            account_id,
             row.get("date"),
             row.get("description"),
             normalized_amount,

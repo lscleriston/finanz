@@ -4,12 +4,18 @@ export interface Transaction {
   id: number;
   source_file: string;
   account_name: string;
+  account_id?: number;
   date: string;
   description: string;
   amount: number;
   category: string;
   details: string;
   inserted_at: string;
+}
+
+export interface Account {
+  id: number;
+  name: string;
 }
 
 export interface Summary {
@@ -64,6 +70,29 @@ export async function deleteAccountMapping(path: string): Promise<void> {
   url.searchParams.set("path", path);
   const res = await fetch(url.toString(), { method: "DELETE" });
   if (!res.ok) throw new Error("Erro ao excluir mapeamento");
+}
+
+export async function fetchAccounts(): Promise<Account[]> {
+  const res = await fetch(`${API_BASE}/api/accounts`);
+  if (!res.ok) throw new Error("Erro ao buscar contas");
+  return res.json();
+}
+
+export async function createAccount(data: { name: string }): Promise<Account> {
+  const res = await fetch(`${API_BASE}/api/accounts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Erro ao criar conta");
+  return res.json();
+}
+
+export async function deleteAccount(id: number): Promise<void> {
+  const url = new URL(`${API_BASE}/api/accounts`);
+  url.searchParams.set("id", String(id));
+  const res = await fetch(url.toString(), { method: "DELETE" });
+  if (!res.ok) throw new Error("Erro ao excluir conta");
 }
 
 export async function createTransaction(data: {

@@ -35,6 +35,7 @@ class Transaction(BaseModel):
     id: int
     source_file: Optional[str]
     account_name: Optional[str]
+    account_id: Optional[int]
     date: Optional[str]
     description: Optional[str]
     amount: Optional[float]
@@ -48,9 +49,19 @@ class AccountMapping(BaseModel):
     name: str
 
 
+class Account(BaseModel):
+    id: int
+    name: str
+
+
+class AccountCreate(BaseModel):
+    name: str
+
+
 class TransactionCreate(BaseModel):
     source_file: Optional[str] = None
     account_name: Optional[str] = None
+    account_id: Optional[int] = None
     date: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[float] = None
@@ -127,6 +138,52 @@ def delete_account_mapping(path: str = Query(...)):
     return lst
 
 
+@app.get("/api/accounts", response_model=List[Account])
+def get_accounts():
+    try:
+        return _query("SELECT * FROM accounts ORDER BY name")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/accounts", response_model=Account)
+def create_account(account: AccountCreate):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+    if not account.name.strip():
+        raise HTTPException(status_code=400, detail="Nome da conta não pode ser vazio")
+
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT OR IGNORE INTO accounts (name) VALUES (?)", (account.name.strip(),))
+        conn.commit()
+        cur.execute("SELECT * FROM accounts WHERE name = ?", (account.name.strip(),))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=500, detail="Erro ao criar conta")
+        return {"id": row[0], "name": row[1]}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/accounts")
+def delete_account(id: int = Query(..., ge=1)):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM accounts WHERE id = ?", (id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Conta com id {id} não encontrada")
+        return {"status": "deleted", "id": id}
+    finally:
+        conn.close()
+
+
 @app.post("/api/reload")
 def reload_data():
     import subprocess
@@ -145,6 +202,7 @@ def get_transactions(
     q: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    account_id: Optional[int] = Query(None, ge=1),
 ):
     where = []
     params: List[str] = []
@@ -161,6 +219,10 @@ def get_transactions(
     if date_to:
         where.append("date <= ?")
         params.append(date_to)
+
+    if account_id is not None:
+        where.append("account_id = ?")
+        params.append(account_id)
 
     where_clause = " AND ".join(where)
     if where_clause:
@@ -185,12 +247,13 @@ def create_transaction(tx: TransactionCreate):
         cur = db.cursor()
         cur.execute(
             """
-            INSERT INTO transactions (source_file, account_name, date, description, amount, category, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (source_file, account_name, account_id, date, description, amount, category, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tx.source_file,
                 tx.account_name,
+                tx.account_id,
                 tx.date,
                 tx.description,
                 tx.amount,
