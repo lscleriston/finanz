@@ -113,8 +113,9 @@ def _write_mappings(mappings: List[dict]) -> None:
 
 
 def _slugify(value: str) -> str:
-    s = value.strip().lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = value.strip()
+    # substitui espaços e caracteres inválidos por '-'
+    s = re.sub(r"[^A-Za-z0-9]+", "-", s)
     s = s.strip("-")
     if not s:
         return "account"

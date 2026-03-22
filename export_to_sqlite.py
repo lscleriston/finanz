@@ -288,6 +288,7 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
             row.get("details"),
         ),
     )
+    return True
 
 
 def consume_csv(path: Path, conn: sqlite3.Connection) -> int:
