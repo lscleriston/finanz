@@ -141,10 +141,14 @@ def _normalize_amount_for_account(account_name: Optional[str], description: Opti
     # Para contas de cartão de crédito, os lançamentos de despesa no extrato
     # podem estar positivos e devem ser tratados como negativo na contabilidade.
     if "cartao" in lower_name or "cartão" in lower_name or "cartãocredito" in lower_name:
-        if "pagamento" in lower_desc or "estorno" in lower_desc or "reembolso" in lower_desc:
-            return amount
-        # valor positivo no extrato do cartão costuma representar débito (saída)
-        return -abs(amount)
+        # Para contas de cartão de crédito Bradesco:
+        # - valores positivos no extrato são despesas (débito) -> armazenar negativo
+        # - valores negativos no extrato são créditos/pagamentos -> armazenar positivo
+        if amount > 0:
+            return -abs(amount)
+        if amount < 0:
+            return abs(amount)
+        return 0.0
 
     return amount
 
