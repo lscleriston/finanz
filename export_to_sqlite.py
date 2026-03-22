@@ -128,8 +128,30 @@ def create_db(conn: sqlite3.Connection) -> None:
 _CURRENT_ACCOUNT_NAME: Optional[str] = None
 
 
+def _normalize_amount_for_account(account_name: Optional[str], description: Optional[str], amount: Optional[float]) -> Optional[float]:
+    if amount is None:
+        return None
+
+    if not account_name:
+        return amount
+
+    lower_name = account_name.lower()
+    lower_desc = (description or "").strip().lower()
+
+    # Para contas de cartão de crédito, os lançamentos de despesa no extrato
+    # podem estar positivos e devem ser tratados como negativo na contabilidade.
+    if "cartao" in lower_name or "cartão" in lower_name or "cartãocredito" in lower_name:
+        if "pagamento" in lower_desc or "estorno" in lower_desc or "reembolso" in lower_desc:
+            return amount
+        # valor positivo no extrato do cartão costuma representar débito (saída)
+        return -abs(amount)
+
+    return amount
+
+
 def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> None:
     account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
+    normalized_amount = _normalize_amount_for_account(account_name, row.get("description"), row.get("amount"))
 
     conn.execute(
         """
@@ -141,7 +163,7 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
             account_name,
             row.get("date"),
             row.get("description"),
-            row.get("amount"),
+            normalized_amount,
             row.get("category"),
             row.get("details"),
         ),
@@ -319,9 +341,16 @@ def _extract_account_info(path: Path) -> Dict[str, Optional[str]]:
         return {"account_name": None}
 
     parts = rel.parts
-    account_name = parts[1] if len(parts) > 1 else (parts[0] if len(parts) > 0 else None)
+    # Por padrão, usar a pasta pai quando disponível (e.g. CartaoCredito/Bradesco)
+    account_name = None
+    if len(parts) > 1:
+        account_name = f"{parts[0]}/{parts[1]}"
+    elif len(parts) > 0:
+        account_name = parts[0]
+
     account_name = _find_account_name(rel.as_posix(), account_name)
     return {"account_name": account_name}
+
 
 
 def process_file(path: Path, conn: sqlite3.Connection) -> int:
