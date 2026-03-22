@@ -99,10 +99,17 @@ def create_db(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
+            name TEXT UNIQUE NOT NULL,
+            path TEXT
         )
         """
     )
+
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(accounts)")
+    account_cols = {row[1] for row in cur.fetchall()}
+    if "path" not in account_cols:
+        conn.execute("ALTER TABLE accounts ADD COLUMN path TEXT")
 
     conn.execute(
         """
@@ -384,13 +391,13 @@ def _extract_account_info(path: Path) -> Dict[str, Optional[str]]:
 
 
 
-def process_file(path: Path, conn: sqlite3.Connection) -> int:
+def process_file(path: Path, conn: sqlite3.Connection, force_account_name: Optional[str] = None) -> int:
     account_info = _extract_account_info(path)
     ext = path.suffix.lower()
 
     global _CURRENT_ACCOUNT_NAME
     old_account_name = _CURRENT_ACCOUNT_NAME
-    _CURRENT_ACCOUNT_NAME = account_info.get("account_name")
+    _CURRENT_ACCOUNT_NAME = force_account_name or account_info.get("account_name")
 
     try:
         if ext in {".csv", ".tsv"}:
@@ -423,23 +430,56 @@ def main() -> None:
         create_db(conn)
         print(f"Banco criado: {DB_PATH}. Iniciando carga limpa.")
 
-    files = [f for f in EXPORT_DIR.rglob("*.*") if f != DB_PATH and f.suffix.lower() != ".db"]
+    # Varre cada conta cadastrada e importa arquivos da pasta indicada por account.path.
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, path FROM accounts")
+    accounts = cur.fetchall()
+
     total = 0
     errors = []
 
-    for path in sorted(files):
-        inserted = 0
-        try:
-            inserted = process_file(path, conn)
-        except Exception as exc:
-            errors.append((path, str(exc)))
+    for account_id, account_name, account_path in accounts:
+        if not account_path:
+            print(f"Aviso: conta '{account_name}' sem pasta configurada (path). Ignorando.)")
             continue
 
-        if inserted > 0:
-            print(f"{path}: inseridos {inserted} lançamentos")
-        else:
-            print(f"{path}: nenhum lançamento identificado")
-        total += inserted
+        base_folder = Path(account_path)
+        if not base_folder.is_absolute():
+            base_folder = EXPORT_DIR / base_folder
+
+        if not base_folder.exists():
+            print(f"Aviso: pasta '{base_folder}' não existe para conta '{account_name}'. Ignorando.")
+            continue
+
+        for path in sorted([f for f in base_folder.rglob("*.*") if f != DB_PATH and f.suffix.lower() != ".db"]):
+            inserted = 0
+            try:
+                inserted = process_file(path, conn, force_account_name=account_name)
+            except Exception as exc:
+                errors.append((path, str(exc)))
+                continue
+
+            if inserted > 0:
+                print(f"{path}: inseridos {inserted} lançamentos")
+            else:
+                print(f"{path}: nenhum lançamento identificado")
+            total += inserted
+
+    if not accounts:
+        files = [f for f in EXPORT_DIR.rglob("*.*") if f != DB_PATH and f.suffix.lower() != ".db"]
+        for path in sorted(files):
+            inserted = 0
+            try:
+                inserted = process_file(path, conn)
+            except Exception as exc:
+                errors.append((path, str(exc)))
+                continue
+
+            if inserted > 0:
+                print(f"{path}: inseridos {inserted} lançamentos")
+            else:
+                print(f"{path}: nenhum lançamento identificado")
+            total += inserted
 
     conn.close()
 

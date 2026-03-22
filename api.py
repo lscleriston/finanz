@@ -52,10 +52,12 @@ class AccountMapping(BaseModel):
 class Account(BaseModel):
     id: int
     name: str
+    path: str
 
 
 class AccountCreate(BaseModel):
     name: str
+    path: str
 
 
 class TransactionCreate(BaseModel):
@@ -150,19 +152,22 @@ def get_accounts():
 def create_account(account: AccountCreate):
     if not DB_PATH.exists():
         raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
-    if not account.name.strip():
-        raise HTTPException(status_code=400, detail="Nome da conta não pode ser vazio")
+    if not account.name.strip() or not account.path.strip():
+        raise HTTPException(status_code=400, detail="Nome da conta e pasta não podem ser vazios")
 
     conn = sqlite3.connect(str(DB_PATH))
     try:
         cur = conn.cursor()
-        cur.execute("INSERT OR IGNORE INTO accounts (name) VALUES (?)", (account.name.strip(),))
+        cur.execute(
+            "INSERT OR IGNORE INTO accounts (name, path) VALUES (?, ?)",
+            (account.name.strip(), account.path.strip()),
+        )
         conn.commit()
         cur.execute("SELECT * FROM accounts WHERE name = ?", (account.name.strip(),))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=500, detail="Erro ao criar conta")
-        return {"id": row[0], "name": row[1]}
+        return {"id": row[0], "name": row[1], "path": row[2]}
     finally:
         conn.close()
 
