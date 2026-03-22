@@ -166,25 +166,26 @@ def _normalize_amount_for_account(account_name: Optional[str], description: Opti
     return amount
 
 
-def _get_or_create_account_id(conn: sqlite3.Connection, account_name: Optional[str]) -> Optional[int]:
+def _get_account_id(conn: sqlite3.Connection, account_name: Optional[str]) -> Optional[int]:
     if not account_name:
         return None
     cur = conn.cursor()
     cur.execute("SELECT id FROM accounts WHERE name = ?", (account_name,))
     row = cur.fetchone()
-    if row:
-        return row[0]
-    cur.execute("INSERT INTO accounts (name) VALUES (?)", (account_name,))
-    conn.commit()
-    return cur.lastrowid
+    return row[0] if row else None
 
 
-def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> None:
+def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str, Optional[str]]) -> bool:
     account_name = row.get("account_name") or _CURRENT_ACCOUNT_NAME
     normalized_amount = _normalize_amount_for_account(account_name, row.get("description"), row.get("amount"))
     account_id = row.get("account_id")
     if account_id is None:
-        account_id = _get_or_create_account_id(conn, account_name)
+        account_id = _get_account_id(conn, account_name)
+
+    if account_id is None:
+        # Não processa transação sem conta cadastrada
+        print(f"Aviso: ignorando transação sem conta cadastrada: account_name={account_name}, date={row.get('date')}, desc={row.get('description')}")
+        return False
 
     conn.execute(
         """
@@ -218,8 +219,8 @@ def consume_csv(path: Path, conn: sqlite3.Connection) -> int:
             }
             if candidate["date"] is None and candidate["amount"] is None:
                 continue
-            insert_transaction(conn, str(path), candidate)
-            added += 1
+            if insert_transaction(conn, str(path), candidate):
+                added += 1
         conn.commit()
         return added
 
@@ -249,8 +250,8 @@ def consume_json(path: Path, conn: sqlite3.Connection) -> int:
         }
         if candidate["date"] is None and candidate["amount"] is None:
             continue
-        insert_transaction(conn, str(path), candidate)
-        added += 1
+        if insert_transaction(conn, str(path), candidate):
+            added += 1
     conn.commit()
     return added
 
@@ -338,8 +339,8 @@ def consume_pdf(path: Path, conn: sqlite3.Connection) -> int:
                             "category": "",
                             "details": json.dumps(linha, ensure_ascii=False),
                         }
-                        insert_transaction(conn, str(path), candidate)
-                        inserted += 1
+                        if insert_transaction(conn, str(path), candidate):
+                            inserted += 1
 
             if inserted > 0:
                 conn.commit()
@@ -413,14 +414,18 @@ def main() -> None:
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # limpeza automática antes de recarregar (evita duplicação por repeats) 
-    # e garante novo contexto, mas mantém se for necessário.
+    # limpeza automática antes de recarregar (evita duplicação por repeats)
+    # preserva contas existentes e limpa somente lançamentos.
     if DB_PATH.exists():
-        DB_PATH.unlink()
-        print(f"Banco removido: {DB_PATH}. Iniciando nova carga limpa.")
-
-    conn = sqlite3.connect(str(DB_PATH))
-    create_db(conn)
+        conn = sqlite3.connect(str(DB_PATH))
+        create_db(conn)
+        conn.execute("DELETE FROM transactions")
+        conn.commit()
+        print(f"Banco existente preservado: {DB_PATH}. Transações limpas e nova carga iniciada.")
+    else:
+        conn = sqlite3.connect(str(DB_PATH))
+        create_db(conn)
+        print(f"Banco criado: {DB_PATH}. Iniciando carga limpa.")
 
     files = [f for f in EXPORT_DIR.rglob("*.*") if f != DB_PATH and f.suffix.lower() != ".db"]
     total = 0

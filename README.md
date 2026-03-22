@@ -13,7 +13,7 @@ Aplicação para importação e análise de transações financeiras de múltipl
   - `GET /api/summary`
   - `POST /api/transactions` (inserção manual)
   - `DELETE /api/transactions?id=` (exclusão)
-  - `POST /api/reload` (recarregar todos arquivos da pasta `export`)
+  - `POST /api/reload` (recarregar todos arquivos da pasta `export`, preservando contas existentes)
 
 - Dashboard em React/Tailwind:
   - Filtros (busca, intervalo de datas)
