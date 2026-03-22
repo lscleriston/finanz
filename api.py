@@ -4,9 +4,11 @@ from pathlib import Path
 import sqlite3
 import json
 import re
+import shutil
+import subprocess
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -211,13 +213,48 @@ def delete_account(id: int = Query(..., ge=1)):
 
 @app.post("/api/reload")
 def reload_data():
-    import subprocess
-
     try:
         subprocess.run(["python3", str(BASE_DIR / "export_to_sqlite.py")], check=True)
         return {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/import")
+async def import_files(
+    account_id: int = Form(...),
+    files: List[UploadFile] = File(...),
+):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    acc = _query("SELECT * FROM accounts WHERE id = ?", (account_id,))
+    if not acc:
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
+
+    account_path = acc[0]["path"]
+    target_folder = Path(account_path)
+    if not target_folder.is_absolute():
+        target_folder = BASE_DIR / "export" / target_folder
+
+    target_folder.mkdir(parents=True, exist_ok=True)
+
+    saved_files = []
+    for file in files:
+        out_path = target_folder / Path(file.filename).name
+        try:
+            with out_path.open("wb") as f:
+                shutil.copyfileobj(file.file, f)
+            saved_files.append(str(out_path))
+        finally:
+            file.file.close()
+
+    try:
+        subprocess.run(["python3", str(BASE_DIR / "export_to_sqlite.py")], check=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo: {e}")
+
+    return {"status": "ok", "saved_files": saved_files, "imported_account_id": account_id}
 
 
 @app.get("/api/transactions", response_model=List[Transaction])

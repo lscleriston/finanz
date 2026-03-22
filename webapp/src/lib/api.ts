@@ -97,6 +97,21 @@ export async function deleteAccount(id: number): Promise<void> {
   if (!res.ok) throw new Error("Erro ao excluir conta");
 }
 
+export async function importFiles(accountId: number, files: File[]): Promise<{ status: string; saved_files: string[]; imported_account_id: number; }> {
+  const formData = new FormData();
+  formData.append("account_id", String(accountId));
+  files.forEach((file) => formData.append("files", file));
+  const res = await fetch(`${API_BASE}/api/import`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao importar arquivos: ${text}`);
+  }
+  return res.json();
+}
+
 export async function createTransaction(data: {
   source_file?: string;
   account_name?: string;

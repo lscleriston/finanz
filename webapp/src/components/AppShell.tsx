@@ -1,8 +1,9 @@
 import { useState } from "react";
 import Dashboard from "@/pages/Dashboard";
 import AccountMappings from "@/pages/AccountMappings";
+import ImportTransactions from "@/pages/ImportTransactions";
 
-type PageView = "dashboard" | "accounts";
+type PageView = "dashboard" | "accounts" | "import";
 
 export default function AppShell() {
   const [page, setPage] = useState<PageView>("dashboard");
@@ -35,12 +36,24 @@ export default function AppShell() {
             >
               Contas
             </button>
+            <button
+              onClick={() => setPage("import")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                page === "import"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              Importar
+            </button>
           </nav>
         </div>
       </header>
 
       <main className="container py-6 animate-fade-in">
-        {page === "dashboard" ? <Dashboard /> : <AccountMappings />}
+        {page === "dashboard" && <Dashboard />}
+        {page === "accounts" && <AccountMappings />}
+        {page === "import" && <ImportTransactions />}
       </main>
     </div>
   );
