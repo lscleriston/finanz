@@ -34,6 +34,7 @@ export default function Transactions() {
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newCategory, setNewCategory] = useState("");
+  const [newRepeatCount, setNewRepeatCount] = useState<number>(1);
   const offsetRef = useRef(0);
 
   const loadPage = useCallback(
@@ -135,22 +136,34 @@ export default function Transactions() {
       alert("Valor inválido");
       return;
     }
+    const repeatCount = Number(newRepeatCount) || 1;
+
+    function addMonthsToDate(dateStr: string, months: number) {
+      const d = new Date(dateStr);
+      const day = d.getDate();
+      const newD = new Date(d.getFullYear(), d.getMonth() + months, day);
+      return newD.toISOString().split("T")[0];
+    }
 
     try {
-      await createTransaction({
-        account_id: selectedAccountId,
-        account_name: accounts.find((c) => c.id === selectedAccountId)?.name || "-",
-        date: newDate,
-        description: newDescription,
-        amount: parsedAmount,
-        category: newCategory,
-        source_file: "manual",
-      });
+      for (let i = 0; i < repeatCount; i++) {
+        const txnDate = i === 0 ? newDate : addMonthsToDate(newDate, i);
+        await createTransaction({
+          account_id: selectedAccountId,
+          account_name: accounts.find((c) => c.id === selectedAccountId)?.name || "-",
+          date: txnDate,
+          description: newDescription,
+          amount: parsedAmount,
+          category: newCategory,
+          source_file: "manual",
+        });
+      }
 
       setNewDate("");
       setNewDescription("");
       setNewAmount("");
       setNewCategory("");
+      setNewRepeatCount(1);
 
       try {
         setHasMore(true);
@@ -158,8 +171,8 @@ export default function Transactions() {
         offsetRef.current = 0;
         await loadPage(true);
       } catch (refreshError) {
-        console.error("Transação criada, mas falha ao recarregar:", refreshError);
-        alert("Transação criada com sucesso, mas houve falha ao recarregar a lista: " + refreshError);
+        console.error("Transação(s) criadas, mas falha ao recarregar:", refreshError);
+        alert("Transação(s) criadas com sucesso, mas houve falha ao recarregar a lista: " + refreshError);
       }
     } catch (e) {
       console.error(e);
@@ -312,6 +325,16 @@ export default function Transactions() {
           <div className="min-w-[140px]">
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Categoria</label>
             <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+          </div>
+          <div className="min-w-[140px]">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Repetições</label>
+            <Input
+              type="number"
+              min={1}
+              max={120}
+              value={newRepeatCount}
+              onChange={(e) => setNewRepeatCount(Number(e.target.value))}
+            />
           </div>
           <Button onClick={handleAddTransaction}>Adicionar lançamento</Button>
         </CardContent>
