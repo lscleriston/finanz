@@ -24,14 +24,12 @@ export default function Transactions() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [q, setQ] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string; invert_values: boolean }[]>([]);
   const [accountFilterIds, setAccountFilterIds] = useState<number[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
-  const [newAccountName, setNewAccountName] = useState("");
-  const [newAccountTipo, setNewAccountTipo] = useState("");
-  const [newAccountInvert, setNewAccountInvert] = useState(false);
+  const [showAllDates, setShowAllDates] = useState(false);
   const [newDate, setNewDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newAmount, setNewAmount] = useState("");
@@ -52,13 +50,22 @@ export default function Transactions() {
 
       try {
         const offset = offsetRef.current;
-        const txns = await fetchTransactions({
+        const from = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
+        const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+        const to = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+        const params: Record<string, unknown> = {
           limit: PAGE_SIZE,
           offset,
           q,
-          date_from: dateFrom,
-          date_to: dateTo,
-        });
+        };
+
+        if (!showAllDates) {
+          params.date_from = from;
+          params.date_to = to;
+        }
+
+        const txns = await fetchTransactions(params);
 
         if (isReset) {
           setTransactions(txns);
@@ -81,7 +88,7 @@ export default function Transactions() {
         setLoadingMore(false);
       }
     },
-    [dateFrom, dateTo, hasMore, q]
+    [selectedMonth, selectedYear, showAllDates, hasMore, q]
   );
 
   useEffect(() => {
@@ -113,6 +120,11 @@ export default function Transactions() {
   };
 
   const handleAddTransaction = async () => {
+    if (!selectedAccountId) {
+      alert("Selecione a conta antes de adicionar uma transação.");
+      return;
+    }
+
     if (!newDate || !newDescription || !newAmount) {
       alert("Preencha data, descrição e valor para adicionar.");
       return;
@@ -140,36 +152,18 @@ export default function Transactions() {
       setNewAmount("");
       setNewCategory("");
 
-      setHasMore(true);
-      setTransactions([]);
-      offsetRef.current = 0;
-      loadPage(true);
+      try {
+        setHasMore(true);
+        setTransactions([]);
+        offsetRef.current = 0;
+        await loadPage(true);
+      } catch (refreshError) {
+        console.error("Transação criada, mas falha ao recarregar:", refreshError);
+        alert("Transação criada com sucesso, mas houve falha ao recarregar a lista: " + refreshError);
+      }
     } catch (e) {
       console.error(e);
       alert("Erro ao adicionar transação: " + e);
-    }
-  };
-
-  const handleCreateAccount = async () => {
-    if (!newAccountName.trim() || !newAccountTipo.trim()) {
-      alert("Informe o nome e o tipo da conta");
-      return;
-    }
-
-    try {
-      const acc = await createAccount({
-        name: newAccountName.trim(),
-        tipo: newAccountTipo.trim(),
-        invert_values: newAccountInvert,
-      });
-      setAccounts((prev) => [...prev, acc]);
-      setSelectedAccountId(acc.id);
-      setNewAccountName("");
-      setNewAccountTipo("");
-      setNewAccountInvert(false);
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao criar conta: " + e);
     }
   };
 
@@ -242,39 +236,48 @@ export default function Transactions() {
             </div>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">De</label>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Mês</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="w-40 rounded border p-2"
+            >
+              <option value={1}>Jan</option>
+              <option value={2}>Fev</option>
+              <option value={3}>Mar</option>
+              <option value={4}>Abr</option>
+              <option value={5}>Mai</option>
+              <option value={6}>Jun</option>
+              <option value={7}>Jul</option>
+              <option value={8}>Ago</option>
+              <option value={9}>Set</option>
+              <option value={10}>Out</option>
+              <option value={11}>Nov</option>
+              <option value={12}>Dez</option>
+            </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Até</label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Ano</label>
+            <Input
+              type="number"
+              min={2000}
+              max={2100}
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="w-28"
+            />
           </div>
-          <Button onClick={handleSearch}>Filtrar</Button>
-        </CardContent>
-      </Card>
-
-      {/* Account registration */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <div className="flex-1 min-w-[220px]">
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Tipo da conta</label>
-            <Input value={newAccountTipo} onChange={(e) => setNewAccountTipo(e.target.value)} placeholder="CartaoCredito / ContaCorrente" />
-          </div>
-          <div className="flex-1 min-w-[220px]">
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nome da conta</label>
-            <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Bradesco" />
-          </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-2">
             <input
-              id="new-account-invert"
+              id="show-all-dates"
               type="checkbox"
-              checked={newAccountInvert}
-              onChange={(e) => setNewAccountInvert(e.target.checked)}
+              checked={showAllDates}
+              onChange={(e) => setShowAllDates(e.target.checked)}
               className="h-4 w-4 rounded border"
             />
-            <label htmlFor="new-account-invert" className="text-xs text-muted-foreground">Inverter valores importados</label>
+            <label htmlFor="show-all-dates" className="text-xs text-muted-foreground">Mostrar todas as datas</label>
           </div>
-          <Button onClick={handleCreateAccount}>Criar conta</Button>
+          <Button onClick={handleSearch}>Filtrar</Button>
         </CardContent>
       </Card>
 
