@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8010"; // backend está no 8010 quando 8000 ocupado
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8011"; // backend em 8011 para evitar conflito em dev
 
 export interface Transaction {
   id: number;
@@ -43,7 +43,7 @@ export async function fetchTransactions(params: {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
   });
-  const res = await fetch(url.toString());
+  const res = await fetch(url.toString(), { cache: "no-store" });
   if (!res.ok) throw new Error("Erro ao buscar transações");
   return res.json();
 }

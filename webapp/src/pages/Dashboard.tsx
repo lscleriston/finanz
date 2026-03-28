@@ -93,9 +93,7 @@ export default function Transactions() {
   );
 
   useEffect(() => {
-    loadPage(true);
-
-    async function loadAccounts() {
+    async function init() {
       try {
         const data = await fetchAccounts();
         setAccounts(data);
@@ -106,9 +104,11 @@ export default function Transactions() {
       } catch (e) {
         console.error(e);
       }
+
+      await loadPage(true);
     }
 
-    loadAccounts();
+    init();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -208,8 +208,20 @@ export default function Transactions() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [hasMore, loading, loadingMore, loadPage]);
 
+  useEffect(() => {
+    const onFocus = () => {
+      setHasMore(true);
+      setTransactions([]);
+      offsetRef.current = 0;
+      loadPage(true).catch((e) => console.error("Erro ao recarregar ao focar:", e));
+    };
+
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadPage]);
+
   const filteredTransactions = accountFilterIds.length
-    ? transactions.filter((tx) => tx.account_id && accountFilterIds.includes(tx.account_id))
+    ? transactions.filter((tx) => (tx.account_id ? accountFilterIds.includes(tx.account_id) : true))
     : transactions;
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
