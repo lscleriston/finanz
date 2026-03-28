@@ -21,32 +21,30 @@ app = FastAPI(title="Finanz API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.get("/api/ping")
+def ping():
+    return {"status": "ok"}
+
+
 
 class Transaction(BaseModel):
     id: int
-    source_file: Optional[str]
-    account_name: Optional[str]
-    account_id: Optional[int]
-    date: Optional[str]
-    original_date: Optional[str]
-    description: Optional[str]
-    amount: Optional[float]
-    category: Optional[str]
-    details: Optional[str]
-    inserted_at: Optional[str]
+    source_file: Optional[str] = None
+    account_name: Optional[str] = None
+    account_id: Optional[int] = None
+    date: Optional[str] = None
+    original_date: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    details: Optional[str] = None
+    inserted_at: Optional[str] = None
 
 
 class AccountMapping(BaseModel):
@@ -393,6 +391,8 @@ def create_transaction(tx: TransactionCreate):
         new_id = cur.lastrowid
         row = _query("SELECT * FROM transactions WHERE id = ?", (new_id,))[0]
         return row
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(status_code=400, detail=f"Transação duplicada: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

@@ -58,6 +58,30 @@ def parse_date(value: str) -> Optional[str]:
         year = 2000 + year if year < 100 else year
         value = f"{parts[0]}/{parts[1]}/{year}"
 
+    return _normalize_date(value)
+
+
+def _normalize_date(value: str) -> Optional[str]:
+    for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y"]:
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_installment(description: str) -> Optional[Dict[str, int]]:
+    if not description:
+        return None
+    m = re.search(r"(\d{1,3})\s*/\s*(\d{1,3})", description)
+    if not m:
+        return None
+    current = int(m.group(1))
+    total = int(m.group(2))
+    if current < 1 or total < 1 or current > total:
+        return None
+    return {"current": current, "total": total}
+
     for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y"]:
         try:
             return datetime.strptime(value, fmt).date().isoformat()
@@ -145,17 +169,20 @@ def create_db(conn: sqlite3.Connection) -> None:
             source_file TEXT,
             account_id INTEGER,
             date TEXT,
+            original_date TEXT,
             description TEXT,
             amount REAL,
             category TEXT,
             details TEXT,
+            installment_number INTEGER,
+            installment_total INTEGER,
             inserted_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(account_id) REFERENCES accounts(id)
         )
         """
     )
 
-    # caso tabela exista sem a coluna nova, adiciona
+    # caso tabela exista sem colunas novas, adiciona
     cur = conn.cursor()
     cur.execute("PRAGMA table_info(transactions)")
     existing_cols = {row[1] for row in cur.fetchall()}
@@ -163,15 +190,30 @@ def create_db(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transactions ADD COLUMN account_id INTEGER")
     if "original_date" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN original_date TEXT")
+    if "installment_number" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN installment_number INTEGER")
+    if "installment_total" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN installment_total INTEGER")
 
-    # Índice único para evitar duplicatas de linhas repetidas, incluindo data original
+    # Índice único para evitar duplicatas de parcelas
     conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, original_date, description, amount)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, original_date, installment_number, amount)"
     )
     conn.commit()
 
 
 _CURRENT_ACCOUNT_NAME: Optional[str] = None
+
+
+def add_months(iso_date: str, months: int) -> str:
+    dt = datetime.fromisoformat(iso_date)
+    month = dt.month - 1 + months
+    year = dt.year + month // 12
+    month = month % 12 + 1
+    day = min(dt.day, [31,
+                       29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                       31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+    return datetime(year, month, day).date().isoformat()
 
 
 def _normalize_amount_for_account(
@@ -301,7 +343,46 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
         invert_values=account_invert,
     )
 
-    conn.execute(
+    installment = parse_installment(str(row.get("description") or ""))
+    if account_tipo and account_tipo.lower() == "cartaocredito" and installment and normalized_amount is not None:
+        current = installment["current"]
+        total = installment["total"]
+        inserted_any = False
+        base_desc = str(row.get("description") or "")
+
+        def installment_description(desc: str, part_num: int, part_total: int) -> str:
+            if re.search(r"\d{1,3}\s*/\s*\d{1,3}", desc):
+                return re.sub(r"\d{1,3}\s*/\s*\d{1,3}", f"{part_num}/{part_total}", desc, count=1)
+            return f"{desc} ({part_num}/{part_total})"
+
+        for part in range(current, total + 1):
+            part_due = add_months(target_date, part - current)
+            part_description = installment_description(base_desc, part, total)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO transactions (source_file, account_id, date, original_date, description, amount, category, details, installment_number, installment_total)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source_file,
+                    account_id,
+                    part_due,
+                    original_date,
+                    part_description,
+                    normalized_amount,
+                    row.get("category"),
+                    row.get("details"),
+                    part,
+                    total,
+                ),
+            )
+            if cur.rowcount > 0:
+                inserted_any = True
+        return inserted_any
+
+    cur = conn.cursor()
+    cur.execute(
         """
         INSERT OR IGNORE INTO transactions (source_file, account_id, date, original_date, description, amount, category, details)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -317,34 +398,70 @@ def insert_transaction(conn: sqlite3.Connection, source_file: str, row: Dict[str
             row.get("details"),
         ),
     )
-    return True
+    return cur.rowcount > 0
 
 
 def consume_csv(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
-    with path.open("r", encoding="utf-8", errors="ignore") as f:
-        reader = csv.DictReader(f)
-        added = 0
-        for raw in reader:
-            candidate = {
-                "date": parse_date(raw.get("date") or raw.get("data") or raw.get("Data") or raw.get("DATA")),
-                "description": (
-                    raw.get("description")
-                    or raw.get("descricao")
-                    or raw.get("Descricao")
-                    or raw.get("title")
-                    or raw.get("Title")
-                    or ""
-                ).strip(),
-                "amount": normalize_amount(raw.get("amount") or raw.get("valor") or raw.get("Valor") or raw.get("Amount")),
-                "category": (raw.get("category") or raw.get("categoria") or "").strip(),
-                "details": json.dumps(raw, ensure_ascii=False),
-            }
-            if candidate["date"] is None and candidate["amount"] is None:
-                continue
-            if insert_transaction(conn, str(path), candidate, due_date=due_date):
-                added += 1
-        conn.commit()
-        return added
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    lines = text.splitlines()
+
+    # find header line (heuristic: contains 'data' or 'date' and several separators)
+    header_idx = None
+    for i, line in enumerate(lines[:12]):
+        if re.search(r"\bdata\b|\bdate\b", line, re.I) and (line.count(";") >= 2 or line.count(",") >= 2 or line.count("\t") >= 2):
+            header_idx = i
+            break
+
+    if header_idx is None:
+        header_idx = 0
+
+    remainder = "\n".join(lines[header_idx:])
+    sample = remainder[:8192]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        reader = csv.DictReader(remainder.splitlines(), dialect=dialect)
+    except Exception:
+        header_line = lines[header_idx] if header_idx < len(lines) else ""
+        if ";" in header_line and "," not in header_line:
+            reader = csv.DictReader(remainder.splitlines(), delimiter=";")
+        else:
+            reader = csv.DictReader(remainder.splitlines())
+
+    added = 0
+    for raw in reader:
+        candidate = {
+            "date": parse_date(raw.get("date") or raw.get("data") or raw.get("Data") or raw.get("DATA")),
+            "description": (
+                raw.get("description")
+                or raw.get("descricao")
+                or raw.get("Descricao")
+                or raw.get("title")
+                or raw.get("Title")
+                or raw.get("Histórico")
+                or raw.get("Historico")
+                or ""
+            ).strip(),
+            "amount": normalize_amount(raw.get("amount") or raw.get("valor") or raw.get("Valor") or raw.get("Amount") or raw.get("Crédito (R$)") or raw.get("Crédito") or raw.get("Crédito(R$)") or raw.get("Débito (R$)") or raw.get("Débito") or raw.get("Debito")),
+            "category": (raw.get("category") or raw.get("categoria") or "").strip(),
+            "details": json.dumps(raw, ensure_ascii=False),
+        }
+
+        # handle separate credit/debit columns
+        if candidate["amount"] is None:
+            credit = normalize_amount(raw.get("Crédito (R$)") or raw.get("Credito (R$)") or raw.get("Crédito") or raw.get("Credito"))
+            debit = normalize_amount(raw.get("Débito (R$)") or raw.get("Debito (R$)") or raw.get("Débito") or raw.get("Debito"))
+            if credit is not None and credit != 0:
+                candidate["amount"] = credit
+            elif debit is not None and debit != 0:
+                candidate["amount"] = -abs(debit)
+
+        if candidate["date"] is None and candidate["amount"] is None:
+            continue
+        if insert_transaction(conn, str(path), candidate, due_date=due_date):
+            added += 1
+
+    conn.commit()
+    return added
 
 
 def consume_json(path: Path, conn: sqlite3.Connection, due_date: Optional[str] = None) -> int:
