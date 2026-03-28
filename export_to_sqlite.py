@@ -195,6 +195,48 @@ def create_db(conn: sqlite3.Connection) -> None:
     if "installment_total" not in existing_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN installment_total INTEGER")
 
+    # add category_id column to reference categories table
+    if "category_id" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN category_id INTEGER")
+
+    # categories table: list of categories
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            parent_id INTEGER,
+            FOREIGN KEY(parent_id) REFERENCES categories(id)
+        )
+        """
+    )
+
+    # ensure parent_id column exists for older DBs
+    cur = conn.cursor()
+    cur.execute("PRAGMA table_info(categories)")
+    cat_cols = {row[1] for row in cur.fetchall()}
+    if "parent_id" not in cat_cols:
+        conn.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER")
+
+    # unique index to avoid duplicate sibling names
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_parent_name ON categories (parent_id, name)")
+
+    # mapping rules from description -> category
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS category_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern TEXT NOT NULL,
+            match_type TEXT NOT NULL DEFAULT 'substring',
+            category_id INTEGER NOT NULL,
+            priority INTEGER NOT NULL DEFAULT 100,
+            active INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY(category_id) REFERENCES categories(id)
+        )
+        """
+    )
+
     # Índice único para evitar duplicatas de parcelas
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions (account_id, original_date, installment_number, amount)"

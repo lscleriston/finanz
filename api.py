@@ -43,8 +43,39 @@ class Transaction(BaseModel):
     description: Optional[str] = None
     amount: Optional[float] = None
     category: Optional[str] = None
+    category_id: Optional[int] = None
     details: Optional[str] = None
     inserted_at: Optional[str] = None
+
+
+class Category(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class CategoryMapping(BaseModel):
+    id: int
+    pattern: str
+    match_type: str
+    category_id: int
+    priority: int
+    active: bool
+
+
+class CategoryMappingCreate(BaseModel):
+    pattern: str
+    match_type: str = "substring"
+    category_id: int
+    priority: int = 100
+    active: bool = True
 
 
 class AccountMapping(BaseModel):
@@ -92,6 +123,16 @@ def _query(sql: str, params: tuple = ()) -> List[dict]:
     rows = cur.fetchall()
     con.close()
     return [dict(r) for r in rows]
+
+
+def _exec(sql: str, params: tuple = ()): 
+    con = sqlite3.connect(str(DB_PATH))
+    cur = con.cursor()
+    cur.execute(sql, params)
+    con.commit()
+    last = cur.lastrowid
+    con.close()
+    return last
 
 
 def _read_mappings() -> List[dict]:
@@ -163,6 +204,173 @@ def get_accounts():
         return _query("SELECT * FROM accounts ORDER BY name")
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/categories", response_model=List[Category])
+def get_categories():
+    try:
+        return _query("SELECT id, name, description, parent_id FROM categories ORDER BY parent_id, name")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/categories", response_model=Category)
+def create_category(cat: CategoryCreate):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT OR IGNORE INTO categories (name, description, parent_id) VALUES (?, ?, ?)", (cat.name.strip(), cat.description, cat.parent_id))
+        conn.commit()
+        cur.execute("SELECT id, name, description, parent_id FROM categories WHERE name = ? AND (parent_id IS ? OR parent_id = ?)", (cat.name.strip(), cat.parent_id, cat.parent_id))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=500, detail="Erro ao criar categoria")
+        return {"id": row[0], "name": row[1], "description": row[2], "parent_id": row[3]}
+    finally:
+        conn.close()
+
+
+@app.get("/api/category-mappings", response_model=List[CategoryMapping])
+def get_category_mappings():
+    try:
+        return _query("SELECT id, pattern, match_type, category_id, priority, active FROM category_mappings ORDER BY priority ASC, id ASC")
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/category-mappings", response_model=CategoryMapping)
+def create_category_mapping(mapping: CategoryMappingCreate):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO category_mappings (pattern, match_type, category_id, priority, active) VALUES (?, ?, ?, ?, ?)", (mapping.pattern, mapping.match_type, mapping.category_id, mapping.priority, int(mapping.active)))
+        conn.commit()
+        mid = cur.lastrowid
+        cur.execute("SELECT id, pattern, match_type, category_id, priority, active FROM category_mappings WHERE id = ?", (mid,))
+        row = cur.fetchone()
+        return {"id": row[0], "pattern": row[1], "match_type": row[2], "category_id": row[3], "priority": row[4], "active": bool(row[5])}
+    finally:
+        conn.close()
+
+
+def _apply_mappings_sql(filters: dict, force: bool = False) -> int:
+    """
+    Apply mappings to transactions. Returns number of updated rows.
+    filters: dict can contain date_from, date_to, account_id
+    """
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    # load mappings ordered
+    cur.execute("SELECT id, pattern, match_type, category_id, priority, active FROM category_mappings WHERE active=1 ORDER BY priority ASC, id ASC")
+    mappings = cur.fetchall()
+
+    # build base filter
+    where = []
+    params = []
+    if filters.get("date_from"):
+        where.append("date >= ?")
+        params.append(filters.get("date_from"))
+    if filters.get("date_to"):
+        where.append("date <= ?")
+        params.append(filters.get("date_to"))
+    if filters.get("account_id"):
+        where.append("account_id = ?")
+        params.append(filters.get("account_id"))
+
+    base_where = "WHERE " + " AND ".join(where) if where else ""
+
+    updated = 0
+
+    # For performance, fetch candidate rows once and apply mappings in Python
+    sql = f"SELECT id, description, amount FROM transactions {base_where}"
+    cur.execute(sql, tuple(params))
+    candidates = cur.fetchall()
+
+    for m in mappings:
+        mid = m[0]
+        pattern = m[1]
+        match_type = m[2]
+        cat_id = m[3]
+        for row in candidates:
+            tid = row[0]
+            desc = row[1] or ""
+            # skip if already has category and not force
+            cur2 = conn.cursor()
+            cur2.execute("SELECT category_id FROM transactions WHERE id = ?", (tid,))
+            existing = cur2.fetchone()
+            if existing and existing[0] and not force:
+                continue
+
+            matched = False
+            if match_type == "substring":
+                if pattern.lower() in desc.lower():
+                    matched = True
+            elif match_type == "starts_with":
+                if desc.lower().startswith(pattern.lower()):
+                    matched = True
+            elif match_type == "regex":
+                try:
+                    if re.search(pattern, desc, flags=re.I):
+                        matched = True
+                except re.error:
+                    matched = False
+
+            if matched:
+                cur.execute("UPDATE transactions SET category_id = ? WHERE id = ?", (cat_id, tid))
+                updated += cur.rowcount
+
+    conn.commit()
+    conn.close()
+    return updated
+
+
+@app.post("/api/transactions/classify")
+def classify_transactions(force: bool = False, date_from: Optional[str] = None, date_to: Optional[str] = None, account_id: Optional[int] = None):
+    filters = {"date_from": date_from, "date_to": date_to, "account_id": account_id}
+    try:
+        updated = _apply_mappings_sql(filters, force=force)
+        return {"updated": updated}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/migrate-categories")
+def migrate_categories(create_backup: bool = True):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+    # backup
+    if create_backup:
+        ts = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup = DATA_DIR / f"finanzdb.db.bak.{ts}"
+        shutil.copy2(DB_PATH, backup)
+
+    conn = sqlite3.connect(str(DB_PATH))
+    cur = conn.cursor()
+    # find distinct non-empty category strings
+    cur.execute("SELECT DISTINCT category FROM transactions WHERE category IS NOT NULL AND TRIM(category) <> ''")
+    rows = cur.fetchall()
+    created = 0
+    for (catname,) in rows:
+        name = catname.strip()
+        cur.execute("INSERT OR IGNORE INTO categories (name, description) VALUES (?, ?)", (name, None))
+        conn.commit()
+        cur.execute("SELECT id FROM categories WHERE name = ?", (name,))
+        cid = cur.fetchone()[0]
+        cur.execute("UPDATE transactions SET category_id = ? WHERE TRIM(category) = ?", (cid, name))
+        created += 1
+
+    conn.commit()
+    conn.close()
+    return {"mapped_distinct": len(rows), "categories_created": created}
 
 
 @app.post("/api/accounts", response_model=Account)
