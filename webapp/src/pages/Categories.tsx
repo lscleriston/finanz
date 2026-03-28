@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { fetchCategories, createCategory, migrateCategories } from "@/lib/api";
+import { Link } from "react-router-dom";
+import { fetchCategories, createCategory, migrateCategories, deleteCategory } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,8 +64,27 @@ export default function Categories() {
     }
   };
 
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Confirmar exclusão desta categoria?")) return;
+    try {
+      await deleteCategory(id);
+      toast.success("Categoria excluída");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao excluir categoria");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
+      <header className="flex items-center justify-between py-4">
+        <nav className="flex gap-2">
+          <Link to="/" className="text-sm px-3 py-1 rounded hover:bg-muted">Transações</Link>
+          <Link to="/" className="text-sm px-3 py-1 rounded hover:bg-muted">Contas</Link>
+          <Link to="/" className="text-sm px-3 py-1 rounded hover:bg-muted">Importar</Link>
+        </nav>
+        <div />
+      </header>
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Nova Categoria</CardTitle>
@@ -104,35 +124,85 @@ export default function Categories() {
         <CardHeader>
           <CardTitle className="text-lg">Categorias Existentes</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Descrição</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {categories.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                    Nenhuma categoria encontrada.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                categories.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-mono text-sm">{c.id}</TableCell>
-                    <TableCell>{c.name}</TableCell>
-                    <TableCell>{c.description}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-4">
+          {categories.length === 0 ? (
+            <div className="h-24 text-center text-muted-foreground">Nenhuma categoria encontrada.</div>
+          ) : (
+            <CategoryTree categories={categories} />
+          )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+
+function CategoryTree({ categories }: { categories: any[] }) {
+  // build id->node map
+  const map = new Map<number, any>();
+  categories.forEach((c) => map.set(c.id, { ...c, children: [] }));
+  const roots: any[] = [];
+  map.forEach((node) => {
+    if (node.parent_id) {
+      const p = map.get(node.parent_id);
+      if (p) p.children.push(node);
+      else roots.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+
+  return (
+    <div>
+      {roots.map((r) => (
+        <TreeNode key={r.id} node={r} level={0} />
+      ))}
+    </div>
+  );
+}
+
+function TreeNode({ node, level }: { node: any; level: number }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div>
+      <div className="flex items-center" style={{ marginLeft: level * 12 }}>
+        {node.children && node.children.length > 0 ? (
+          <button className="mr-2 text-sm" onClick={() => setOpen((v) => !v)}>
+            {open ? "▾" : "▸"}
+          </button>
+        ) : (
+          <div style={{ width: 20 }} />
+        )}
+        <label className="flex items-center gap-2">
+          <input type="checkbox" className="h-4 w-4 rounded border" />
+          <span className="ml-1">{node.name}</span>
+        </label>
+        <div className="ml-3">
+          <button
+            className="text-destructive text-sm"
+            onClick={async () => {
+              if (!window.confirm(`Excluir categoria '${node.name}'?`)) return;
+              try {
+                await deleteCategory(node.id);
+                toast.success('Categoria excluída');
+                window.location.reload();
+              } catch (err: any) {
+                toast.error(err?.message || 'Erro ao excluir categoria');
+              }
+            }}
+          >
+            Excluir
+          </button>
+        </div>
+      </div>
+      {open && node.children && node.children.length > 0 && (
+        <div>
+          {node.children.map((ch: any) => (
+            <TreeNode key={ch.id} node={ch} level={level + 1} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

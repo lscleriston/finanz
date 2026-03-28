@@ -260,6 +260,9 @@ export default function Transactions() {
               />
             </div>
           </div>
+          <div className="ml-auto">
+            <Button onClick={() => (window.location.href = "/categories")}>Categorias</Button>
+          </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Mês</label>
             <select

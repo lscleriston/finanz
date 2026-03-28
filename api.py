@@ -232,6 +232,30 @@ def create_category(cat: CategoryCreate):
         conn.close()
 
 
+@app.delete("/api/categories")
+def delete_category(id: int = Query(...)):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+    conn = sqlite3.connect(str(DB_PATH))
+    cur = conn.cursor()
+    # check for children
+    cur.execute("SELECT COUNT(*) FROM categories WHERE parent_id = ?", (id,))
+    children = cur.fetchone()[0]
+    if children > 0:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Categoria tem {children} subcategorias. Remova-as ou reatribua antes.")
+    # check for transactions
+    cur.execute("SELECT COUNT(*) FROM transactions WHERE category_id = ?", (id,))
+    txs = cur.fetchone()[0]
+    if txs > 0:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Categoria está em uso por {txs} transações. Reatribua antes de excluir.")
+    cur.execute("DELETE FROM categories WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return {"deleted": id}
+
+
 @app.get("/api/category-mappings", response_model=List[CategoryMapping])
 def get_category_mappings():
     try:

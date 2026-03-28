@@ -172,7 +172,7 @@ export async function fetchCategories(): Promise<Category[]> {
   return res.json();
 }
 
-export async function createCategory(data: { name: string; description?: string }): Promise<Category> {
+export async function createCategory(data: { name: string; description?: string; parent_id?: number }): Promise<Category> {
   const res = await fetch(`${API_BASE}/api/categories`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -180,6 +180,16 @@ export async function createCategory(data: { name: string; description?: string 
   });
   if (!res.ok) throw new Error("Erro ao criar categoria");
   return res.json();
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  const url = new URL(`${API_BASE}/api/categories`);
+  url.searchParams.set("id", String(id));
+  const res = await fetch(url.toString(), { method: "DELETE" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao excluir categoria: ${text}`);
+  }
 }
 
 export async function fetchCategoryMappings(): Promise<CategoryMapping[]> {
