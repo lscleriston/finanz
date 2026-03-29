@@ -110,7 +110,8 @@ export default function Transactions() {
       try {
         const cats = await fetchCategories();
         setCategories(cats);
-        setCategoryFilterIds(cats.map((c) => c.id));
+        // keep categories unchecked by default
+        setCategoryFilterIds([]);
       } catch (e) {
         console.error("Erro ao carregar categorias:", e);
       }
