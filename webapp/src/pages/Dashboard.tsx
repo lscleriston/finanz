@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchTransactions, fetchSummary, fetchAccounts, createAccount, createTransaction, deleteTransaction, type Transaction, type Summary } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { fetchTransactions, fetchSummary, fetchAccounts, fetchCategories, createAccount, createTransaction, deleteTransaction, type Transaction, type Summary } from "@/lib/api";
 import { formatDate, formatCurrency } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ export default function Transactions() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [accounts, setAccounts] = useState<{ id: number; name: string; path: string; tipo: string; invert_values: boolean }[]>([]);
   const [accountFilterIds, setAccountFilterIds] = useState<number[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [categoryFilterIds, setCategoryFilterIds] = useState<number[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined);
   const [showAllDates, setShowAllDates] = useState(false);
   const [newDate, setNewDate] = useState("");
@@ -103,6 +105,14 @@ export default function Transactions() {
         }
       } catch (e) {
         console.error(e);
+      }
+
+      try {
+        const cats = await fetchCategories();
+        setCategories(cats);
+        setCategoryFilterIds(cats.map((c) => c.id));
+      } catch (e) {
+        console.error("Erro ao carregar categorias:", e);
       }
 
       await loadPage(true);
@@ -220,9 +230,69 @@ export default function Transactions() {
     return () => window.removeEventListener("focus", onFocus);
   }, [loadPage]);
 
-  const filteredTransactions = accountFilterIds.length
-    ? transactions.filter((tx) => (tx.account_id ? accountFilterIds.includes(tx.account_id) : true))
-    : transactions;
+  const filteredTransactions = transactions.filter((tx) => {
+    // account filter
+    if (accountFilterIds.length) {
+      if (tx.account_id) {
+        if (!accountFilterIds.includes(tx.account_id)) return false;
+      }
+    }
+
+    // category filter
+    if (categoryFilterIds.length) {
+      // if tx has category_id prefer it
+      if (tx.category_id) {
+        if (!categoryFilterIds.includes(tx.category_id)) return false;
+      } else if (tx.category) {
+        // fall back to matching category name
+        const matched = categories.some((c) => categoryFilterIds.includes(c.id) && c.name === tx.category);
+        if (!matched) return false;
+      } else {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // build category tree from flat list
+  const categoryTree = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; parent_id?: number | null; children: any[] }>();
+    categories.forEach((c: any) => map.set(c.id, { ...c, parent_id: (c as any).parent_id ?? null, children: [] }));
+    const roots: any[] = [];
+    map.forEach((node) => {
+      const pid = node.parent_id;
+      if (pid && map.has(pid)) {
+        map.get(pid)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return roots;
+  }, [categories]);
+
+  function getDescendantIds(node: any): number[] {
+    const ids: number[] = [node.id];
+    if (node.children && node.children.length) {
+      node.children.forEach((c: any) => ids.push(...getDescendantIds(c)));
+    }
+    return ids;
+  }
+
+  function toggleCategorySelection(node: any) {
+    const ids = getDescendantIds(node);
+    setCategoryFilterIds((prev) => {
+      const has = ids.every((i) => prev.includes(i));
+      if (has) {
+        // remove all
+        return prev.filter((i) => !ids.includes(i));
+      }
+      // add missing
+      const set = new Set(prev);
+      ids.forEach((i) => set.add(i));
+      return Array.from(set);
+    });
+  }
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
     if (!a.date || !b.date) return 0;
@@ -390,6 +460,41 @@ export default function Transactions() {
               >
                 Limpar filtro
               </button>
+              {/* Category filter (tree) */}
+              <div className="mt-6">
+                <h2 className="text-sm font-semibold mb-2">Filtro de categorias</h2>
+                <div className="max-h-72 overflow-auto text-sm">
+                  {categoryTree.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Sem categorias</div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {categoryTree.map((node) => (
+                        <CategoryNode
+                          key={node.id}
+                          node={node}
+                          depth={0}
+                          selectedIds={categoryFilterIds}
+                          onToggle={toggleCategorySelection}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    className="rounded bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground"
+                    onClick={() => setCategoryFilterIds(categories.map((c) => c.id))}
+                  >
+                    Selecionar todos
+                  </button>
+                  <button
+                    className="rounded bg-muted px-2 py-1 text-xs"
+                    onClick={() => setCategoryFilterIds([])}
+                  >
+                    Limpar filtro
+                  </button>
+                </div>
+              </div>
             </aside>
             <div className="flex-1">
               <div className="p-4 border-b bg-background/50">
@@ -483,5 +588,30 @@ export default function Transactions() {
       )}
       {loadingMore && <p className="text-center text-sm text-muted-foreground">Carregando mais transações...</p>}
     </div>
+  );
+}
+
+// Recursive category node component (renders a tree node with check and children)
+function CategoryNode({ node, depth, selectedIds, onToggle }: any) {
+  const isSelected = node && selectedIds.includes(node.id);
+  return (
+    <li>
+      <div className="flex items-center" style={{ marginLeft: depth * 12 }}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggle(node)}
+          className="h-4 w-4 rounded border"
+        />
+        <span className="ml-2">{node.name}</span>
+      </div>
+      {node.children && node.children.length > 0 && (
+        <ul className="mt-1">
+          {node.children.map((c: any) => (
+            <CategoryNode key={c.id} node={c} depth={depth + 1} selectedIds={selectedIds} onToggle={onToggle} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,92 +6,203 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 30% 12%;
+    /* ── Light mode ─────────────────────────────── */
+    --background:             60 5% 97%;
+    --foreground:             60 3% 10%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 30% 12%;
+    --card:                   0 0% 100%;
+    --card-foreground:        60 3% 10%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 30% 12%;
+    --popover:                0 0% 100%;
+    --popover-foreground:     60 3% 10%;
 
-    --primary: 220 60% 30%;
-    --primary-foreground: 0 0% 98%;
+    /* Verde como primário */
+    --primary:                161 68% 37%;
+    --primary-foreground:     0 0% 100%;
 
-    --secondary: 220 15% 92%;
-    --secondary-foreground: 220 30% 20%;
+    --secondary:              60 4% 93%;
+    --secondary-foreground:   60 3% 25%;
 
-    --muted: 220 15% 94%;
-    --muted-foreground: 220 10% 50%;
+    --muted:                  60 4% 94%;
+    --muted-foreground:       60 3% 45%;
 
-    --accent: 160 50% 40%;
-    --accent-foreground: 0 0% 100%;
+    --accent:                 161 68% 37%;
+    --accent-foreground:      0 0% 100%;
 
-    --destructive: 0 70% 55%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive:            0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 220 60% 30%;
+    --border:                 60 4% 88%;
+    --input:                  60 4% 88%;
+    --ring:                   161 68% 37%;
 
-    --radius: 0.625rem;
+    --radius:                 0.5rem;
 
-    --success: 160 50% 40%;
-    --danger: 0 70% 55%;
-    --warning: 38 92% 50%;
+    /* Semânticas extras */
+    --success:                161 68% 37%;
+    --danger:                 0 72% 58%;
+    --warning:                38 90% 52%;
 
-    --sidebar-background: 220 30% 14%;
-    --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 160 50% 45%;
+    /* ── Sidebar (dark por padrão mesmo em light mode) */
+    --sidebar-background:     60 3% 9%;
+    --sidebar-foreground:     60 3% 82%;
+    --sidebar-primary:        161 68% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 25% 20%;
-    --sidebar-accent-foreground: 220 10% 85%;
-    --sidebar-border: 220 20% 22%;
-    --sidebar-ring: 160 50% 45%;
+    --sidebar-accent:         60 3% 15%;
+    --sidebar-accent-foreground: 60 3% 82%;
+    --sidebar-border:         60 3% 16%;
+    --sidebar-ring:           161 68% 42%;
   }
 
   .dark {
-    --background: 220 25% 8%;
-    --foreground: 220 10% 92%;
-    --card: 220 25% 12%;
-    --card-foreground: 220 10% 92%;
-    --popover: 220 25% 12%;
-    --popover-foreground: 220 10% 92%;
-    --primary: 160 50% 45%;
-    --primary-foreground: 220 30% 8%;
-    --secondary: 220 20% 18%;
-    --secondary-foreground: 220 10% 85%;
-    --muted: 220 20% 16%;
-    --muted-foreground: 220 10% 55%;
-    --accent: 160 50% 40%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 20% 20%;
-    --input: 220 20% 20%;
-    --ring: 160 50% 45%;
-    --sidebar-background: 220 30% 6%;
-    --sidebar-foreground: 220 10% 85%;
-    --sidebar-primary: 160 50% 45%;
+    --background:             60 3% 7%;
+    --foreground:             60 3% 93%;
+
+    --card:                   60 3% 10%;
+    --card-foreground:        60 3% 93%;
+
+    --popover:                60 3% 10%;
+    --popover-foreground:     60 3% 93%;
+
+    --primary:                161 68% 40%;
+    --primary-foreground:     0 0% 100%;
+
+    --secondary:              60 3% 15%;
+    --secondary-foreground:   60 3% 75%;
+
+    --muted:                  60 3% 14%;
+    --muted-foreground:       60 3% 52%;
+
+    --accent:                 161 68% 40%;
+    --accent-foreground:      0 0% 100%;
+
+    --destructive:            0 63% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:                 60 3% 18%;
+    --input:                  60 3% 18%;
+    --ring:                   161 68% 40%;
+
+    --success:                161 68% 40%;
+    --danger:                 0 63% 55%;
+    --warning:                38 90% 52%;
+
+    --sidebar-background:     60 3% 5%;
+    --sidebar-foreground:     60 3% 82%;
+    --sidebar-primary:        161 68% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 25% 12%;
-    --sidebar-accent-foreground: 220 10% 85%;
-    --sidebar-border: 220 20% 14%;
-    --sidebar-ring: 160 50% 45%;
+    --sidebar-accent:         60 3% 11%;
+    --sidebar-accent-foreground: 60 3% 82%;
+    --sidebar-border:         60 3% 13%;
+    --sidebar-ring:           161 68% 42%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
   }
+
+  /* Scrollbar discreta */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
 }
 
 @layer utilities {
+  /* Valores monetários sempre em mono com alinhamento tabular */
+  .font-money {
+    font-family: 'DM Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Crédito / débito */
+  .text-credit { @apply text-primary; }
+  .text-debit   { @apply text-destructive; }
+}
+
+@layer components {
+  /* ── Linha de transação ───────────────────────── */
+  .transaction-row {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg
+           hover:bg-muted/60 transition-colors cursor-pointer;
+  }
+
+  /* ── Badges de categoria ─────────────────────── */
+  .badge-category {
+    @apply inline-flex items-center px-2 py-0.5
+           rounded-full text-xs font-medium whitespace-nowrap;
+  }
+
+  .badge-installment {
+    @apply inline-flex items-center px-1.5 py-0.5
+           rounded-full text-xs font-medium
+           bg-violet-100 text-violet-700
+           dark:bg-violet-950 dark:text-violet-300;
+  }
+
+  .badge-pending {
+    @apply inline-flex items-center gap-1 px-2 py-0.5
+           rounded-full text-xs font-medium
+           bg-amber-50 text-amber-800
+           border border-amber-300/50
+           dark:bg-amber-950 dark:text-amber-300
+           dark:border-amber-700/40;
+  }
+
+  /* ── Nav lateral ─────────────────────────────── */
+  .nav-item {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg
+           text-sm font-medium text-sidebar-foreground/70
+           hover:bg-sidebar-accent hover:text-sidebar-foreground
+           transition-colors;
+  }
+
+  .nav-item-active {
+    @apply bg-sidebar-accent text-sidebar-foreground;
+  }
+
+  /* ── Upload zone ─────────────────────────────── */
+  .upload-zone {
+    @apply flex flex-col items-center justify-center gap-3
+           rounded-xl border-2 border-dashed border-border
+           p-10 text-center cursor-pointer
+           hover:border-primary/50 hover:bg-primary/5
+           transition-colors;
+  }
+
+  /* ── Summary bar (rodapé da tela de transações) ─ */
+  .summary-bar {
+    @apply grid grid-cols-4 gap-3 px-4 py-3
+           border-t border-border bg-muted/30 shrink-0;
+  }
+
+  .summary-item-label {
+    @apply text-xs font-medium text-muted-foreground
+           uppercase tracking-wide;
+  }
+
+  .summary-item-value {
+    @apply font-money text-sm font-semibold;
   }
 }
