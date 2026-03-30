@@ -7,6 +7,7 @@ export type ReportCategoryRow = {
   parentName: string | null
   isParent: boolean
   isTotal: boolean
+  parentKey?: string | null
   totals: Record<string, number>
   grandTotal: number
 }
@@ -58,8 +59,8 @@ export function buildReportData(transactions: Transaction[], months: string[]): 
 function buildCategoryRows(transactions: Transaction[], months: string[]): ReportCategoryRow[] {
   const rows: ReportCategoryRow[] = []
 
-  // Group by parent (if present) otherwise by category
-  const map = new Map<string, { name: string; txs: Transaction[] }>()
+  // Group by parent -> subcategory
+  const porPai = new Map<string, { parentId: number | null; parentName: string | null; subs: Map<string, { catId: number | null; catName: string; txs: Transaction[] }> }>()
 
   transactions.forEach(t => {
     const parentId = (t as any).parent_category_id ?? null
@@ -67,24 +68,78 @@ function buildCategoryRows(transactions: Transaction[], months: string[]): Repor
     const catId = t.category_id ?? null
     const catName = (t.category && t.category !== '') ? t.category : (t as any).category_name ?? 'Sem Categoria'
 
-    const key = parentId ? `p_${parentId}` : `c_${catId ?? 'none'}_${catName}`
-    if (!map.has(key)) map.set(key, { name: parentName ?? catName, txs: [] })
-    map.get(key)!.txs.push(t)
+    const parentKey = parentId ? `p_${parentId}` : `solo_${catId ?? 'none'}`
+    if (!porPai.has(parentKey)) porPai.set(parentKey, { parentId, parentName: parentName ?? catName, subs: new Map() })
+
+    const grupo = porPai.get(parentKey)!
+    const subKey = catId ? `s_${catId}` : `s_none_${catName}`
+    if (!grupo.subs.has(subKey)) grupo.subs.set(subKey, { catId, catName, txs: [] })
+    grupo.subs.get(subKey)!.txs.push(t)
   })
 
-  // For now, treat each map entry as a simple group (no deep parent/sub rows)
-  map.forEach((group, key) => {
-    const txs = group.txs
-    rows.push({
-      categoryId: txs[0].category_id ?? null,
-      categoryName: group.name,
-      parentId: (txs[0] as any).parent_category_id ?? null,
-      parentName: (txs[0] as any).parent_category_name ?? null,
-      isParent: false,
-      isTotal: false,
-      totals: somarPorMes(txs, months),
-      grandTotal: txs.reduce((s, t) => s + t.amount, 0),
-    })
+  porPai.forEach((grupo, parentKey) => {
+    const subs = Array.from(grupo.subs.values())
+
+    if (subs.length === 1 && parentKey.startsWith('solo_')) {
+      // single category (no hierarchical parent) — render simple row
+      const txs = subs[0].txs
+      rows.push({
+        categoryId: txs[0].category_id ?? null,
+        categoryName: grupo.parentName,
+        parentId: null,
+        parentName: null,
+        isParent: false,
+        isTotal: false,
+        parentKey: null,
+        totals: somarPorMes(txs, months),
+        grandTotal: txs.reduce((s, t) => s + t.amount, 0),
+      })
+    } else {
+      // parent row
+      const todasTxs: Transaction[] = []
+      subs.forEach(s => todasTxs.push(...s.txs))
+
+      rows.push({
+        categoryId: null,
+        categoryName: grupo.parentName ?? 'Sem Categoria',
+        parentId: grupo.parentId ?? null,
+        parentName: null,
+        isParent: true,
+        isTotal: false,
+        parentKey,
+        totals: {},
+        grandTotal: 0,
+      })
+
+      // child rows
+      subs.forEach(s => {
+        const txs = s.txs
+        rows.push({
+          categoryId: txs[0].category_id ?? null,
+          categoryName: s.catName,
+          parentId: grupo.parentId ?? null,
+          parentName: grupo.parentName ?? null,
+          isParent: false,
+          isTotal: false,
+          parentKey,
+          totals: somarPorMes(txs, months),
+          grandTotal: txs.reduce((a, t) => a + t.amount, 0),
+        })
+      })
+
+      // total row
+      rows.push({
+        categoryId: null,
+        categoryName: `Total — ${grupo.parentName}`,
+        parentId: null,
+        parentName: null,
+        isParent: false,
+        isTotal: true,
+        parentKey,
+        totals: somarPorMes(todasTxs, months),
+        grandTotal: todasTxs.reduce((a, t) => a + t.amount, 0),
+      })
+    }
   })
 
   return rows

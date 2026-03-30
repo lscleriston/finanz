@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ReportData, labelMes, formatVal } from '@/lib/utils/report'
 import { SectionHeader, CategoryRow, TotalRow } from './ReportTableRow'
 import { cn } from '@/lib/utils'
@@ -6,6 +7,22 @@ type Props = { data: ReportData }
 
 export function ReportTable({ data }: Props) {
   const { months, entradas, saidas, totalEntradas, totalSaidas, saldo } = data
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  function toggleParent(key?: string | null) {
+    if (!key) return
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  function renderRows(rows: typeof entradas) {
+    return rows.map((row, i) => {
+      // child rows are shown only when their parent is expanded
+      if (row.parentKey && !row.isParent && !row.isTotal) {
+        if (!expanded[row.parentKey]) return null
+      }
+      return <CategoryRow key={i} row={row} months={months} expanded={Boolean(row.parentKey ? expanded[row.parentKey] : undefined)} onToggle={toggleParent} />
+    })
+  }
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
@@ -21,11 +38,11 @@ export function ReportTable({ data }: Props) {
         </thead>
         <tbody>
           <SectionHeader label="↑ Entradas" color="text-primary" months={months} />
-          {entradas.map((row, i) => <CategoryRow key={i} row={row} months={months} />)}
+          {renderRows(entradas)}
           <TotalRow label="Total — Entradas" totals={totalEntradas} months={months} color="text-primary" bg="bg-primary/5" />
 
           <SectionHeader label="↓ Saídas" color="text-destructive" months={months} />
-          {saidas.map((row, i) => <CategoryRow key={i} row={row} months={months} />)}
+          {renderRows(saidas)}
           <TotalRow label="Total — Saídas" totals={totalSaidas} months={months} color="text-destructive" bg="bg-destructive/5" />
 
           <tr className="border-t-2 border-border">

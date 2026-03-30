@@ -13,11 +13,16 @@ export function ValCell({ value, bold }: { value: number; bold?: boolean }) {
   )
 }
 
-export function CategoryRow({ row, months }: { row: ReportCategoryRow; months: string[] }) {
+export function CategoryRow({ row, months, expanded, onToggle }: { row: ReportCategoryRow; months: string[]; expanded?: boolean; onToggle?: (key: string) => void }) {
   if (row.isParent) {
     return (
       <tr className="bg-muted/40">
-        <td className="px-3 py-1.5 text-xs font-medium text-foreground truncate" colSpan={months.length + 2}>{row.categoryName}</td>
+        <td colSpan={months.length + 2} className="px-3 py-1.5 text-xs font-medium text-foreground truncate">
+          <button onClick={() => row.parentKey && onToggle?.(row.parentKey)} className="flex items-center gap-2">
+            <span className="text-2xs">{expanded ? '▾' : '▸'}</span>
+            <span>{row.categoryName}</span>
+          </button>
+        </td>
       </tr>
     )
   }
