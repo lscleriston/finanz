@@ -16,6 +16,7 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
   const [contaId, setContaId] = useState<string>('');
   const [tipo, setTipo] = useState<'despesa' | 'receita' | 'transferencia'>('despesa');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [repeatCount, setRepeatCount] = useState<number>(1);
 
   const descInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,12 +48,39 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
     mutationFn: async () => {
       const valorNum = parseFloat(String(valor).replace(',', '.')) || 0;
       const valorFinal = tipo === 'despesa' ? -Math.abs(valorNum) : Math.abs(valorNum);
-      return updateTransaction(txn.id, {
+
+      // update current txn
+      const updated = await updateTransaction(txn.id, {
         description: descricao,
         amount: valorFinal,
         account_id: contaId ? Number(contaId) : null,
         category_id: catId ? Number(catId) : null,
       });
+
+      // if repeatCount > 1, create additional occurrences (month by month)
+      if (repeatCount && repeatCount > 1) {
+        function addMonthsToDate(dateStr: string, months: number) {
+          const d = new Date(dateStr);
+          const day = d.getDate();
+          const newD = new Date(d.getFullYear(), d.getMonth() + months, day);
+          return newD.toISOString().split('T')[0];
+        }
+
+        for (let i = 1; i < repeatCount; i++) {
+          const txnDate = addMonthsToDate(txn.date, i);
+          await (await import('@/lib/api')).createTransaction({
+            account_id: contaId ? Number(contaId) : txn.account_id,
+            account_name: contas.find((c: any) => String(c.id) === String(contaId))?.name || txn.account_name,
+            date: txnDate,
+            description: descricao,
+            amount: valorFinal,
+            category_id: catId ? Number(catId) : null,
+            source_file: 'manual',
+          });
+        }
+      }
+
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -175,6 +203,11 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
         </button>
 
         <button onClick={onCloseEdit} className="px-2.5 py-1 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:text-foreground transition-colors">Cancelar</button>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">Repetir</label>
+          <input type="number" min={1} value={repeatCount} onChange={(e) => setRepeatCount(Math.max(1, Number(e.target.value) || 1))} className="w-16 rounded border p-1 text-sm" />
+        </div>
 
         <button onClick={handleSave} disabled={saveMutation.isPending} className="px-3 py-1 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50">{saveMutation.isPending ? 'Salvando...' : 'Salvar'}</button>
       </div>
