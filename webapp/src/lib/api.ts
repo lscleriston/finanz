@@ -137,6 +137,21 @@ export async function createTransaction(data: {
   return res.json();
 }
 
+export async function updateTransaction(id: number, data: Partial<{ date: string; original_date?: string; description?: string; amount?: number; category?: string; category_id?: number; details?: string; account_id?: number }>): Promise<Transaction> {
+  const url = new URL(`${API_BASE}/api/transactions`);
+  url.searchParams.set("id", String(id));
+  const res = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Erro ao atualizar transação: ${t}`);
+  }
+  return res.json();
+}
+
 export async function deleteTransaction(id: number): Promise<void> {
   const url = new URL(`${API_BASE}/api/transactions`);
   url.searchParams.set("id", String(id));

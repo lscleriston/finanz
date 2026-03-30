@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -201,7 +201,16 @@ def delete_account_mapping(path: str = Query(...)):
 @app.get("/api/accounts", response_model=List[Account])
 def get_accounts():
     try:
-        return _query("SELECT * FROM accounts ORDER BY name")
+        # include a computed balance per account from transactions
+        sql = """
+        SELECT a.id, a.name, a.path, a.tipo, a.invert_values,
+               COALESCE(SUM(t.amount), 0) AS balance
+        FROM accounts a
+        LEFT JOIN transactions t ON t.account_id = a.id
+        GROUP BY a.id
+        ORDER BY a.name
+        """
+        return _query(sql)
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -629,6 +638,31 @@ def create_transaction(tx: TransactionCreate):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+@app.patch("/api/transactions", response_model=Transaction)
+def update_transaction(id: int = Query(..., ge=1), payload: dict = Body(...)):
+    if not DB_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Banco não encontrado: {DB_PATH}")
+
+    allowed = {"date", "original_date", "description", "amount", "category", "category_id", "details", "account_id"}
+    updates = {k: v for k, v in payload.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
+
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cur = conn.cursor()
+        set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+        params = list(updates.values()) + [id]
+        cur.execute(f"UPDATE transactions SET {set_clause} WHERE id = ?", tuple(params))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Transação com id {id} não encontrada")
+        row = _query("SELECT * FROM transactions WHERE id = ?", (id,))[0]
+        return row
+    finally:
+        conn.close()
 
 
 @app.delete("/api/transactions")
