@@ -41,7 +41,7 @@ export default function TransactionRow({ txn, onUpdated }: any) {
         </div>
       </div>
       <div className="col-span-1 text-sm">{txn.account_name || '-'}</div>
-      <div className="col-span-1 text-right font-mono font-semibold">{formatCurrency(txn.amount || 0)}</div>
+      <div className="col-span-1 text-right font-mono font-semibold" style={{ color: (txn.amount || 0) < 0 ? '#f87171' : '#34d399' }}>{formatCurrency(txn.amount || 0)}</div>
     </div>
   );
 }
