@@ -303,8 +303,8 @@ export default function Transactions() {
 
   const sortedTransactions = [...filteredTransactions].sort((a, b) => {
     if (!a.date || !b.date) return 0;
-    if (a.date < b.date) return 1;
-    if (a.date > b.date) return -1;
+    if (a.date < b.date) return -1;
+    if (a.date > b.date) return 1;
     return 0;
   });
 
@@ -317,7 +317,7 @@ export default function Transactions() {
     return acc;
   }, {} as Record<string, Transaction[]>);
 
-  const dates = Object.keys(groupedTransactions).sort((a, b) => (a < b ? 1 : -1));
+  const dates = Object.keys(groupedTransactions).sort((a, b) => (a < b ? -1 : 1));
 
   // convert groupedTransactions object into an ordered array of groups for TransactionsList
   const groupsArray = dates.map((d) => {

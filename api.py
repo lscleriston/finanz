@@ -593,7 +593,7 @@ def get_transactions(
     FROM transactions t
     LEFT JOIN accounts a ON t.account_id = a.id
     {where_clause}
-    ORDER BY t.date DESC, t.id DESC
+    ORDER BY t.date ASC, t.id ASC
     LIMIT ? OFFSET ?
     """
     params += [limit, offset]
