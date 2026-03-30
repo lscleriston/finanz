@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchAccounts } from '@/lib/api';
 import { ACCOUNT_COLORS } from '@/lib/constants';
 import { formatCurrency } from '@/lib/tokens';
-import { List, LayoutDashboard, Upload, Clock, Tag } from 'lucide-react';
+import { List, LayoutDashboard, Upload, Clock, Tag, BarChart2 } from 'lucide-react';
 import AccountsSidebar from './AccountsSidebar';
 
 export default function AppShell() {
@@ -61,6 +61,17 @@ export default function AppShell() {
           >
             <Tag size={14} strokeWidth={1.6} />
             Categorias
+          </NavLink>
+          <NavLink
+            to="/relatorio"
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                isActive ? "bg-white/6" : "text-white/80 hover:bg-white/3"
+              }`
+            }
+          >
+            <BarChart2 size={14} strokeWidth={1.6} />
+            Relatório
           </NavLink>
         </nav>
         {/* accounts section - sticky at bottom so it's always visible */}

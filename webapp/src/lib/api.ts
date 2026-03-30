@@ -49,6 +49,23 @@ export async function fetchTransactions(params: {
   return res.json();
 }
 
+export async function fetchTransactionsAll(params: {
+  date_from: string
+  date_to: string
+  include_transfers?: boolean
+}): Promise<Transaction[]> {
+  const url = new URL(`${API_BASE}/api/transactions`);
+  url.searchParams.set('date_from', params.date_from);
+  url.searchParams.set('date_to', params.date_to);
+  // backend enforces a maximum limit (1000). omit large limit to avoid 422.
+  // If include_transfers is false, backend currently does not accept an exclude_transfers param,
+  // so we don't set it here; filtering can be implemented server-side if needed.
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('Erro ao buscar transações');
+  const data = await res.json();
+  return Array.isArray(data) ? data : (data.transactions ?? [])
+}
+
 export async function fetchSummary(): Promise<Summary> {
   const res = await fetch(`${API_BASE}/api/summary`);
   if (!res.ok) throw new Error("Erro ao buscar resumo");

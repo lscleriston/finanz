@@ -8,6 +8,7 @@ import Categories from "./pages/Categories";
 import CategoryMappings from "./pages/CategoryMappings";
 import AppShell from "@/components/AppShell";
 import Transactions from "./pages/Dashboard";
+import Relatorio from "./pages/Relatorio";
 import AccountMappings from "./pages/AccountMappings";
 import ImportTransactions from "./pages/ImportTransactions";
 
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/" element={<AppShell />}>
             <Route index element={<Transactions />} />
             <Route path="accounts" element={<AccountMappings />} />
+            <Route path="relatorio" element={<Relatorio />} />
             <Route path="import" element={<ImportTransactions />} />
             <Route path="categories" element={<Categories />} />
             <Route path="category-mappings" element={<CategoryMappings />} />
