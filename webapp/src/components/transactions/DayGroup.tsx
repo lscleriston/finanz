@@ -3,7 +3,7 @@ import TransactionRow from './TransactionRow';
 import { formatDayLabel } from '@/lib/tokens';
 import { formatCurrency } from '@/lib/format';
 
-export default function DayGroup({ date, transactions = [], saldo = 0, onUpdated }: any) {
+export default function DayGroup({ date, transactions = [], saldo = 0, onUpdated, editandoId = null, onStartEdit, onCloseEdit }: any) {
   return (
     <div>
       <div className="flex items-center justify-between py-2 px-3 bg-muted/10 rounded text-sm font-semibold">
@@ -12,7 +12,14 @@ export default function DayGroup({ date, transactions = [], saldo = 0, onUpdated
       </div>
       <div className="mt-2 space-y-1">
         {transactions.map((t: any) => (
-          <TransactionRow key={t.id} txn={t} onUpdated={onUpdated} />
+          <TransactionRow
+            key={t.id}
+            txn={t}
+            onUpdated={onUpdated}
+            isEditing={editandoId === t.id}
+            onStartEdit={() => onStartEdit && onStartEdit(t.id)}
+            onCloseEdit={() => onCloseEdit && onCloseEdit()}
+          />
         ))}
       </div>
     </div>

@@ -337,6 +337,17 @@ export default function Transactions() {
   });
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+
+  function handleStartEdit(id: number) {
+    // close current editing row without saving
+    if (editandoId && editandoId !== id) setEditandoId(null);
+    setEditandoId(id);
+  }
+
+  function handleCloseEdit() {
+    setEditandoId(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -371,7 +382,7 @@ export default function Transactions() {
           {loading ? (
             <div className="text-sm text-muted-foreground">Carregando transações…</div>
           ) : (
-            <TransactionsList groups={groupsArray} />
+            <TransactionsList groups={groupsArray} editandoId={editandoId} onStartEdit={handleStartEdit} onCloseEdit={handleCloseEdit} />
           )}
         </CardContent>
       </Card>
