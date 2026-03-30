@@ -751,6 +751,4 @@ function TransactionsEmpty({ busca }: { busca: string }) {
 - Não alterar `fetchTransactions()` em `api.ts` — só os parâmetros passados
 - Não usar `position: fixed` em nada — usar `overflow-hidden` no shell + `overflow-y-auto` na lista
 - Não hardcodar cores de categoria — vir sempre do backend ou de um mapa por `category_id`
-- Não mostrar a coluna `id` da transação ao usuário — é dado interno
-- Não usar `font-bold` (700) — máximo `font-semibold` (600)
-- Não reinventar componentes — `Dialog`, `Popover`, `Command`, `Select` já estão instalados via shadcn
+- Não mostrar a coluna `id` da transação ao usuário — é
