@@ -50,11 +50,13 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
       const valorFinal = tipo === 'despesa' ? -Math.abs(valorNum) : Math.abs(valorNum);
 
       // update current txn
+      const categoryName = categorias.find((c: any) => String(c.id) === String(catId))?.name ?? null;
       const updated = await updateTransaction(txn.id, {
         description: descricao,
         amount: valorFinal,
         account_id: contaId ? Number(contaId) : null,
         category_id: catId ? Number(catId) : null,
+        category: categoryName,
       });
 
       // if repeatCount > 1, create additional occurrences (month by month)
@@ -66,17 +68,18 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
           return newD.toISOString().split('T')[0];
         }
 
-        for (let i = 1; i < repeatCount; i++) {
+          for (let i = 1; i < repeatCount; i++) {
           const txnDate = addMonthsToDate(txn.date, i);
-          await (await import('@/lib/api')).createTransaction({
-            account_id: contaId ? Number(contaId) : txn.account_id,
-            account_name: contas.find((c: any) => String(c.id) === String(contaId))?.name || txn.account_name,
-            date: txnDate,
-            description: descricao,
-            amount: valorFinal,
-            category_id: catId ? Number(catId) : null,
-            source_file: 'manual',
-          });
+            await (await import('@/lib/api')).createTransaction({
+              account_id: contaId ? Number(contaId) : txn.account_id,
+              account_name: contas.find((c: any) => String(c.id) === String(contaId))?.name || txn.account_name,
+              date: txnDate,
+              description: descricao,
+              amount: valorFinal,
+              category_id: catId ? Number(catId) : null,
+              category: categoryName,
+              source_file: 'manual',
+            });
         }
       }
 
