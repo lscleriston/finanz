@@ -42,105 +42,132 @@ export function labelMes(mesKey: string): string {
     .replace(/^\u0000?\w/, c => c.toUpperCase())
 }
 
-export function buildReportData(transactions: Transaction[], months: string[]): ReportData {
+export interface CategoryNode {
+  id: number
+  name: string
+  parent_id: number | null
+}
+
+export function buildReportData(transactions: Transaction[], months: string[], categories?: CategoryNode[]): ReportData {
   const entradas = transactions.filter(t => t.amount > 0)
   const saidas = transactions.filter(t => t.amount < 0)
 
   return {
     months,
-    entradas: buildCategoryRows(entradas, months),
-    saidas: buildCategoryRows(saidas, months),
+    entradas: buildCategoryRowsWithHierarchy(entradas, months, categories),
+    saidas: buildCategoryRowsWithHierarchy(saidas, months, categories),
     totalEntradas: somarPorMes(entradas, months),
     totalSaidas: somarPorMes(saidas, months),
     saldo: calcularSaldo(entradas, saidas, months),
   }
 }
 
-function buildCategoryRows(transactions: Transaction[], months: string[]): ReportCategoryRow[] {
+function buildCategoryRowsWithHierarchy(transactions: Transaction[], months: string[], categories?: CategoryNode[]): ReportCategoryRow[] {
   const rows: ReportCategoryRow[] = []
 
-  // Group by parent -> subcategory
-  const porPai = new Map<string, { parentId: number | null; parentName: string | null; subs: Map<string, { catId: number | null; catName: string; txs: Transaction[] }> }>()
+  // if categories provided, use them to build a tree and use category_id to assign txs
+  const catById = new Map<number, CategoryNode>()
+  const childrenMap = new Map<number | null, number[]>()
+  if (categories) {
+    categories.forEach(c => {
+      catById.set(c.id, c)
+      const p = c.parent_id ?? null
+      if (!childrenMap.has(p)) childrenMap.set(p, [])
+      childrenMap.get(p)!.push(c.id)
+    })
+  }
 
+  const txsByCategory = new Map<number | 'none', Transaction[]>()
   transactions.forEach(t => {
-    const parentId = (t as any).parent_category_id ?? null
-    const parentName = (t as any).parent_category_name ?? null
-    const catId = t.category_id ?? null
-    const catName = (t.category && t.category !== '') ? t.category : (t as any).category_name ?? 'Sem Categoria'
-
-    const parentKey = parentId ? `p_${parentId}` : `solo_${catId ?? 'none'}`
-    if (!porPai.has(parentKey)) porPai.set(parentKey, { parentId, parentName: parentName ?? catName, subs: new Map() })
-
-    const grupo = porPai.get(parentKey)!
-    const subKey = catId ? `s_${catId}` : `s_none_${catName}`
-    if (!grupo.subs.has(subKey)) grupo.subs.set(subKey, { catId, catName, txs: [] })
-    grupo.subs.get(subKey)!.txs.push(t)
-  })
-
-  porPai.forEach((grupo, parentKey) => {
-    const subs = Array.from(grupo.subs.values())
-
-    if (subs.length === 1 && parentKey.startsWith('solo_')) {
-      // single category (no hierarchical parent) — render simple row
-      const txs = subs[0].txs
-      rows.push({
-        categoryId: txs[0].category_id ?? null,
-        categoryName: grupo.parentName,
-        parentId: null,
-        parentName: null,
-        isParent: false,
-        isTotal: false,
-        parentKey: null,
-        totals: somarPorMes(txs, months),
-        grandTotal: txs.reduce((s, t) => s + t.amount, 0),
-      })
+    const cid = t.category_id ?? null
+    if (cid && catById.has(cid)) {
+      if (!txsByCategory.has(cid)) txsByCategory.set(cid, [])
+      txsByCategory.get(cid)!.push(t)
     } else {
-      // parent row
-      const todasTxs: Transaction[] = []
-      subs.forEach(s => todasTxs.push(...s.txs))
-
-      rows.push({
-        categoryId: null,
-        categoryName: grupo.parentName ?? 'Sem Categoria',
-        parentId: grupo.parentId ?? null,
-        parentName: null,
-        isParent: true,
-        isTotal: false,
-        parentKey,
-        totals: {},
-        grandTotal: 0,
-      })
-
-      // child rows
-      subs.forEach(s => {
-        const txs = s.txs
-        rows.push({
-          categoryId: txs[0].category_id ?? null,
-          categoryName: s.catName,
-          parentId: grupo.parentId ?? null,
-          parentName: grupo.parentName ?? null,
-          isParent: false,
-          isTotal: false,
-          parentKey,
-          totals: somarPorMes(txs, months),
-          grandTotal: txs.reduce((a, t) => a + t.amount, 0),
-        })
-      })
-
-      // total row
-      rows.push({
-        categoryId: null,
-        categoryName: `Total — ${grupo.parentName}`,
-        parentId: null,
-        parentName: null,
-        isParent: false,
-        isTotal: true,
-        parentKey,
-        totals: somarPorMes(todasTxs, months),
-        grandTotal: todasTxs.reduce((a, t) => a + t.amount, 0),
-      })
+      // try to match by name if no category_id
+      const name = (t.category && t.category !== '') ? t.category : (t as any).category_name ?? ''
+      let matched = false
+      if (categories && name) {
+        for (const c of categories) {
+          if (c.name.toLowerCase() === name.toLowerCase()) {
+            if (!txsByCategory.has(c.id)) txsByCategory.set(c.id, [])
+            txsByCategory.get(c.id)!.push(t)
+            matched = true
+            break
+          }
+        }
+      }
+      if (!matched) {
+        if (!txsByCategory.has('none')) txsByCategory.set('none', [])
+        txsByCategory.get('none')!.push(t)
+      }
     }
   })
+
+  function pushSimpleRow(catName: string, catId: number | null, txs: Transaction[]) {
+    rows.push({
+      categoryId: catId,
+      categoryName: catName,
+      parentId: null,
+      parentName: null,
+      isParent: false,
+      isTotal: false,
+      parentKey: null,
+      totals: somarPorMes(txs, months),
+      grandTotal: txs.reduce((s, t) => s + t.amount, 0),
+    })
+  }
+
+  if (categories) {
+    // process roots
+    const roots = childrenMap.get(null) || []
+    for (const rid of roots) {
+      const root = catById.get(rid)!
+      const childIds = childrenMap.get(rid) || []
+
+      // collect all txs for this root and its children
+      const allTxs: Transaction[] = []
+      if (txsByCategory.has(rid)) allTxs.push(...(txsByCategory.get(rid) || []))
+      childIds.forEach(cid => { if (txsByCategory.has(cid)) allTxs.push(...(txsByCategory.get(cid) || [])) })
+
+      if (childIds.length === 0) {
+        // no children: show as simple row
+        if (allTxs.length > 0) pushSimpleRow(root.name, root.id, allTxs)
+      } else {
+        // parent row
+        rows.push({ categoryId: null, categoryName: root.name, parentId: root.parent_id ?? null, parentName: null, isParent: true, isTotal: false, parentKey: `p_${root.id}`, totals: {}, grandTotal: 0 })
+
+        // child rows
+        for (const cid of childIds) {
+          const cnode = catById.get(cid)!
+          const txs = txsByCategory.get(cid) ?? []
+          if (txs.length > 0) rows.push({ categoryId: cnode.id, categoryName: cnode.name, parentId: cnode.parent_id ?? null, parentName: root.name, isParent: false, isTotal: false, parentKey: `p_${root.id}`, totals: somarPorMes(txs, months), grandTotal: txs.reduce((a, t) => a + t.amount, 0) })
+        }
+
+        // total row (if any txs)
+        if (allTxs.length > 0) rows.push({ categoryId: null, categoryName: `Total — ${root.name}`, parentId: null, parentName: null, isParent: false, isTotal: true, parentKey: `p_${root.id}`, totals: somarPorMes(allTxs, months), grandTotal: allTxs.reduce((a, t) => a + t.amount, 0) })
+      }
+    }
+
+    // handle transactions without category or categories not in tree
+    const noneTxs = txsByCategory.get('none') ?? []
+    if (noneTxs.length > 0) {
+      // put under 'Sem Categoria' parent
+      rows.push({ categoryId: null, categoryName: 'Sem Categoria', parentId: null, parentName: null, isParent: true, isTotal: false, parentKey: 'p_none', totals: {}, grandTotal: 0 })
+      rows.push({ categoryId: null, categoryName: 'Sem Categoria', parentId: null, parentName: 'Sem Categoria', isParent: false, isTotal: false, parentKey: 'p_none', totals: somarPorMes(noneTxs, months), grandTotal: noneTxs.reduce((a, t) => a + t.amount, 0) })
+      rows.push({ categoryId: null, categoryName: `Total — Sem Categoria`, parentId: null, parentName: null, isParent: false, isTotal: true, parentKey: 'p_none', totals: somarPorMes(noneTxs, months), grandTotal: noneTxs.reduce((a, t) => a + t.amount, 0) })
+    }
+
+  } else {
+    // fallback: group by provided category string/name
+    const map = new Map<string, Transaction[]>()
+    transactions.forEach(t => {
+      const name = (t.category && t.category !== '') ? t.category : (t as any).category_name ?? 'Sem Categoria'
+      if (!map.has(name)) map.set(name, [])
+      map.get(name)!.push(t)
+    })
+    map.forEach((txs, name) => pushSimpleRow(name, null, txs))
+  }
 
   return rows
 }

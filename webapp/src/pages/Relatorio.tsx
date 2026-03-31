@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BarChart2 } from 'lucide-react'
 import { ReportFilters } from '@/components/relatorio/ReportFilters'
 import { ReportTable } from '@/components/relatorio/ReportTable'
-import { fetchTransactionsAll } from '@/lib/api'
+import { fetchTransactionsAll, fetchCategories } from '@/lib/api'
 import { gerarMeses, buildReportData } from '@/lib/utils/report'
 
 type FilterParams = { dateFrom: string; dateTo: string; includeTransfers: boolean }
@@ -22,8 +22,10 @@ export default function Relatorio() {
     queryFn: () => fetchTransactionsAll({ date_from: params.dateFrom, date_to: params.dateTo, include_transfers: params.includeTransfers }),
   })
 
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => fetchCategories() })
+
   const months = useMemo(() => gerarMeses(params.dateFrom, params.dateTo), [params])
-  const reportData = useMemo(() => buildReportData(transactions, months), [transactions, months])
+  const reportData = useMemo(() => buildReportData(transactions, months, categories), [transactions, months, categories])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
