@@ -27,6 +27,14 @@ export default function Relatorio() {
   const months = useMemo(() => gerarMeses(params.dateFrom, params.dateTo), [params])
   const reportData = useMemo(() => buildReportData(transactions, months, categories), [transactions, months, categories])
 
+  // Temp debug logs — remove after diagnosis
+  // eslint-disable-next-line no-console
+  console.log('Relatorio: fetched transactions count=', transactions.length)
+  // eslint-disable-next-line no-console
+  if (transactions.length > 0) console.log('Relatorio: first transaction=', transactions[0])
+  // eslint-disable-next-line no-console
+  console.log('Relatorio: months=', months, 'report rows entradas=', reportData.entradas.length, 'saidas=', reportData.saidas.length)
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 h-14 border-b border-border shrink-0">
