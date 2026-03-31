@@ -24,6 +24,15 @@ export function ReportTable({ data }: Props) {
     })
   }
 
+  // auto-expand parents when data changes to make report visible immediately
+  useEffect(() => {
+    const keys: Record<string, boolean> = {}
+    ;[...data.entradas, ...data.saidas].forEach(r => {
+      if (r.isParent && r.parentKey) keys[r.parentKey] = true
+    })
+    if (Object.keys(keys).length) setExpanded(keys)
+  }, [data])
+
   return (
     <div className="border border-border rounded-xl overflow-hidden">
       <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
