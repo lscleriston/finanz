@@ -83,6 +83,9 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
         }
       }
 
+      // debug log the updated row returned by backend
+      // eslint-disable-next-line no-console
+      console.log('TransactionRow: updated response', updated);
       return updated;
     },
     onSuccess: () => {
@@ -90,6 +93,11 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
       queryClient.invalidateQueries({ queryKey: ['report-transactions'] });
       if (onUpdated) onUpdated();
       onCloseEdit && onCloseEdit();
+    },
+    onError: (err: any) => {
+      // eslint-disable-next-line no-console
+      console.error('Failed to save transaction', err);
+      alert('Erro ao salvar transação: ' + (err?.message || String(err)));
     },
   });
 
