@@ -76,10 +76,18 @@ export default function Transactions() {
 
         const txns = await fetchTransactions(params);
 
+        function dedupeById(arr: any[]) {
+          const seen = new Map<number, any>();
+          for (const t of arr) {
+            if (t && typeof t.id !== 'undefined') seen.set(t.id, t);
+          }
+          return Array.from(seen.values()).sort((a,b) => (a.date||'') < (b.date||'') ? -1 : (a.date||'') > (b.date||'') ? 1 : 0);
+        }
+
         if (isReset) {
-          setTransactions(txns);
+          setTransactions(dedupeById(txns));
         } else {
-          setTransactions((prev) => [...prev, ...txns]);
+          setTransactions((prev) => dedupeById(prev.concat(txns)));
         }
 
         offsetRef.current = offset + txns.length;
