@@ -9,8 +9,8 @@ import { gerarMeses, buildReportData } from '@/lib/utils/report'
 type FilterParams = { dateFrom: string; dateTo: string; includeTransfers: boolean }
 
 const DEFAULT_PARAMS: FilterParams = {
-  dateFrom: (() => { const d = new Date(); d.setMonth(d.getMonth() - 4); d.setDate(1); return d.toISOString().slice(0,10) })(),
-  dateTo: new Date().toISOString().slice(0,10),
+  dateFrom: (() => { const d = new Date(); d.setMonth(0); d.setDate(1); return d.toISOString().slice(0,10); })(),
+  dateTo: (() => { const y = new Date().getFullYear(); const d = new Date(y, 11, 31); return d.toISOString().slice(0,10); })(),
   includeTransfers: false,
 }
 

@@ -87,6 +87,7 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['report-transactions'] });
       if (onUpdated) onUpdated();
       onCloseEdit && onCloseEdit();
     },
@@ -96,6 +97,7 @@ export default function TransactionRow({ txn, onUpdated, isEditing = false, onSt
     mutationFn: async () => deleteTransaction(txn.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['report-transactions'] });
       if (onUpdated) onUpdated();
       onCloseEdit && onCloseEdit();
     },
