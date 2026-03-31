@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ReportData, labelMes, formatVal } from '@/lib/utils/report'
 import { SectionHeader, CategoryRow, TotalRow } from './ReportTableRow'
 import { cn } from '@/lib/utils'
